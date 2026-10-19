@@ -2,6 +2,11 @@
 
 A lightweight native macOS issue tracker for one person and their coding agents.
 
+- **Projects** contain **epics** and **tasks**; a task may have **subtasks**.
+- Every ticket gets a permanent identifier (`ARC-1`, `ARC-2`, …) from one global counter.
+- One local SQLite database is shared by the app and the `arc` command-line tool, so what an agent does shows up in the app within a couple of seconds.
+- Agents work through the `arc` CLI, an MCP server (`arc mcp`) or an installable skill.
+
 ## Requirements
 
 - macOS 26+
@@ -15,3 +20,71 @@ swift test             # run the test suite
 scripts/bundle.sh      # assemble build/Arc.app
 open build/Arc.app
 ```
+
+The app is signed ad hoc for local use. If you copy it to another Mac, Gatekeeper will ask for confirmation the first time.
+
+## Data location
+
+All data lives in one SQLite file: `~/Library/Application Support/Arc/arc.sqlite`. Set `ARC_DB_PATH` to use a different file (both the app and the CLI honor it), which is handy for trying things out:
+
+```sh
+export ARC_DB_PATH=/tmp/arc-demo/arc.sqlite
+```
+
+## Command-line tool
+
+Install it from the app (Settings → Agents → Install Command Line Tool), or put `.build/debug/arc` / `Arc.app/Contents/Helpers/arc` on your `PATH`.
+
+Tickets are referred to as `ARC-12`, `arc-12` or just `12`; projects by name (any case). Statuses are `backlog`, `todo`, `in_progress`, `in_review`, `done`, `canceled` (`"In Progress"` and `in-progress` work too); priorities are `none`, `urgent`, `high`, `medium`, `low`.
+
+```sh
+arc project create Website --description "Marketing site"
+arc project list
+arc project update Website --name Site
+arc project archive Site
+arc project unarchive Site
+
+arc create --project Site --title "Fix footer" --priority high
+arc create --project Site --kind epic --title "Launch"
+arc create --project Site --title "Hero image" --epic ARC-2
+arc create --parent ARC-1 --title "Add tests"      # subtask: the project comes from the parent
+arc list --project Site                            # open tickets only
+arc list --project Site --status "In Progress"
+arc list --all --limit 20                          # include Done and Canceled
+arc show ARC-1
+arc update ARC-1 --status "In Progress"
+arc update ARC-1 --epic none
+arc comment ARC-1 "Parser done, starting tests"    # recorded as written by an agent
+arc delete ARC-4 --yes
+```
+
+Long text can be piped in with `-`:
+
+```sh
+echo "Steps to reproduce..." | arc update ARC-1 --description -
+echo "Multi-line note" | arc comment ARC-1 -
+```
+
+Add `--json` to any data command for machine-readable output. Errors then look like `{"error": {"code": "not_found", "message": "..."}}` on stdout. Exit status is 0 on success, 1 on errors and 64 on usage errors. Run `arc --help` or `arc <command> --help` for every option.
+
+## MCP server
+
+`arc mcp` runs a [Model Context Protocol](https://modelcontextprotocol.io) server over stdio. Register it with Claude Code:
+
+```sh
+claude mcp add arc -- arc mcp
+```
+
+Tools: `list_projects`, `create_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket` and `add_comment`. There is deliberately no delete tool; agents cancel unwanted work instead.
+
+## Agent skill
+
+The skill (`skills/arc/SKILL.md`) teaches an agent the ticket hierarchy and the workflow: pick up a ticket, set it to In Progress, leave progress comments, finish in In Review or Done.
+
+```sh
+arc skill install                  # writes ~/.claude/skills/arc/SKILL.md
+arc skill install --dir ./skills   # writes ./skills/arc/SKILL.md
+arc skill install --force          # overwrite a different, existing file
+```
+
+The skill text is embedded in the `arc` binary. After editing `skills/arc/SKILL.md`, run `scripts/embed-skill.sh` to regenerate `Sources/ArcAgentKit/SkillText.swift` (a test fails if they drift apart).

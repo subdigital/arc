@@ -17,6 +17,8 @@ struct Arc: AsyncParsableCommand {
             UpdateCommand.self,
             CommentCommand.self,
             DeleteCommand.self,
+            MCPCommand.self,
+            SkillCommand.self,
         ]
     )
 }

@@ -63,11 +63,11 @@
 
 ## 5. MCP server and agent skill
 
-- [ ] 5.1 Build the tool table in ArcAgentKit with the name, description, JSON Schema and handler for each tool: `list_projects`, `create_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket` and `add_comment`. There is no delete tool. Verify with in-process handler tests, including `isError` for an invalid subtask parent.
-- [ ] 5.2 Implement `arc mcp` using the SDK `Server` and `StdioTransport`, with server instructions, and write logs only to stderr. Verify with an end-to-end stdio test: `initialize`, then `tools/list` returns 7 tools, then `tools/call create_ticket` succeeds.
-- [ ] 5.3 Write `skills/arc/SKILL.md`. It has `name: arc` frontmatter and covers the hierarchy, identifiers, statuses, the pick-up → In Progress → comment → In Review/Done workflow, a note that descriptions and comments are GitHub Flavored Markdown (task lists, code blocks with language tags, `ARC-12` references), and examples using both MCP and the CLI. Embed it as a constant in ArcAgentKit. Verify with a test that the constant matches the file byte for byte.
-- [ ] 5.4 Implement `arc skill install [--dir] [--force]`. It defaults to `~/.claude/skills/arc/SKILL.md` and refuses to overwrite a different file without `--force`. Verify with tests using a temporary `--dir`.
-- [ ] 5.5 Document CLI usage, MCP registration (`claude mcp add arc -- arc mcp`) and skill installation in the README. Verify that each documented command runs as written against a temporary DB.
+- [x] 5.1 Build the tool table in ArcAgentKit with the name, description, JSON Schema and handler for each tool: `list_projects`, `create_project`, `list_tickets`, `get_ticket`, `create_ticket`, `update_ticket` and `add_comment`. There is no delete tool. Verify with in-process handler tests, including `isError` for an invalid subtask parent.
+- [x] 5.2 Implement `arc mcp` using the SDK `Server` and `StdioTransport`, with server instructions, and write logs only to stderr. Verify with an end-to-end stdio test: `initialize`, then `tools/list` returns 7 tools, then `tools/call create_ticket` succeeds.
+- [x] 5.3 Write `skills/arc/SKILL.md`. It has `name: arc` frontmatter and covers the hierarchy, identifiers, statuses, the pick-up → In Progress → comment → In Review/Done workflow, a note that descriptions and comments are GitHub Flavored Markdown (task lists, code blocks with language tags, `ARC-12` references), and examples using both MCP and the CLI. Embed it as a constant in ArcAgentKit. Verify with a test that the constant matches the file byte for byte.
+- [x] 5.4 Implement `arc skill install [--dir] [--force]`. It defaults to `~/.claude/skills/arc/SKILL.md` and refuses to overwrite a different file without `--force`. Verify with tests using a temporary `--dir`.
+- [x] 5.5 Document CLI usage, MCP registration (`claude mcp add arc -- arc mcp`) and skill installation in the README. Verify that each documented command runs as written against a temporary DB.
 
 ## 6. App shell and theme (ArcApp)
 
