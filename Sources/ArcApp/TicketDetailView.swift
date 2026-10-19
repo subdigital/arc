@@ -265,23 +265,14 @@ struct TicketDetailView: View {
                 CommentView(comment: comment)
             }
             VStack(alignment: .trailing, spacing: 8) {
-                TextEditor(text: $commentDraft)
+                TextField("Leave a comment… (Markdown)", text: $commentDraft, axis: .vertical)
+                    .textFieldStyle(.plain)
                     .font(.system(size: 13))
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 70, maxHeight: 180)
-                    .padding(8)
+                    .lineLimit(3...10)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                     .background(Theme.bgElevated, in: RoundedRectangle(cornerRadius: 6))
                     .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(commentFocused ? Theme.accent : Theme.border, lineWidth: 1))
-                    .overlay(alignment: .topLeading) {
-                        if commentDraft.isEmpty {
-                            Text("Leave a comment… (Markdown)")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Theme.textTertiary)
-                                .padding(.leading, 13)
-                                .padding(.top, 16)
-                                .allowsHitTesting(false)
-                        }
-                    }
                     .focused($commentFocused)
                     .accessibilityLabel("New comment (Markdown)")
                 Button("Comment") { postComment() }

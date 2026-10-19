@@ -47,23 +47,15 @@ struct CreateTicketSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 14)
 
-            TextEditor(text: $details)
+            // A vertical TextField draws its own placeholder, so caret and placeholder always line up.
+            TextField("Add description… (Markdown)", text: $details, axis: .vertical)
+                .textFieldStyle(.plain)
                 .font(.system(size: 14))
                 .foregroundStyle(Theme.textPrimary)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 110, maxHeight: 220)
-                .padding(.horizontal, 15)
-                .padding(.top, 8)
-                .overlay(alignment: .topLeading) {
-                    if details.isEmpty {
-                        Text("Add description… (Markdown)")
-                            .font(.system(size: 14))
-                            .foregroundStyle(Theme.textTertiary)
-                            .padding(.leading, 20)
-                            .padding(.top, 16)
-                            .allowsHitTesting(false)
-                    }
-                }
+                .lineLimit(5...12)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
 
             pills
                 .padding(.horizontal, 16)
