@@ -12,8 +12,9 @@ struct CreateTicketSheet: View {
     @State private var projectID: String?
     @State private var epicID: String?
     @State private var parentID: String?
-    @State private var status: TicketStatus = .todo
-    @State private var priority: TicketPriority = .none
+    @State private var status: TicketStatus
+    @State private var priority: TicketPriority
+    @State private var createMore: Bool
     @State private var tasksInProject: [Ticket] = []
     @FocusState private var titleFocused: Bool
 
@@ -23,6 +24,9 @@ struct CreateTicketSheet: View {
         _projectID = State(initialValue: request.projectID)
         _epicID = State(initialValue: request.epicID)
         _parentID = State(initialValue: request.parentID)
+        _status = State(initialValue: request.status)
+        _priority = State(initialValue: request.priority)
+        _createMore = State(initialValue: request.createMore)
     }
 
     private var canSave: Bool {
@@ -65,6 +69,11 @@ struct CreateTicketSheet: View {
             HStack(spacing: 10) {
                 Text("⌘↩ to create").font(Theme.metaFont).foregroundStyle(Theme.textTertiary)
                 Spacer()
+                Toggle("Create more", isOn: $createMore)
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+                    .font(Theme.metaFont)
+                    .foregroundStyle(Theme.textSecondary)
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(SubtleButtonStyle())
@@ -212,10 +221,23 @@ struct CreateTicketSheet: View {
             priority: priority
         )
         Task {
-            if let ticket = await app.perform({ try await app.store.createTicket(new) }) {
-                app.selectedTicketID = ticket.id
-                dismiss()
-            }
+            guard let ticket = await app.perform({ try await app.store.createTicket(new) }) else { return }
+            app.selectedTicketID = ticket.id
+            app.showToast("Created \(ticket.identifier)")
+            dismiss()
+            guard createMore else { return }
+            // Present the form again, carrying the properties over, so it is clear something happened.
+            let next = CreationRequest(
+                projectID: ticket.projectId,
+                kind: kind,
+                parentID: kind == .subtask ? parentID : nil,
+                epicID: kind == .task ? epicID : nil,
+                status: status,
+                priority: priority,
+                createMore: true
+            )
+            try? await Task.sleep(for: .milliseconds(350))
+            app.creation = next
         }
     }
 }

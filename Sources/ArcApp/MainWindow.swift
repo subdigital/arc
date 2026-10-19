@@ -46,10 +46,33 @@ struct MainWindow: View {
             }
             return .systemAction
         })
+        .overlay {
+            if app.showingShortcuts {
+                ShortcutsOverlay().environment(app).transition(.opacity)
+            }
+        }
+        .overlay(alignment: .bottomTrailing) {
+            if let toast = app.toast {
+                ToastView(message: toast.message)
+                    .padding(20)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: app.showingShortcuts)
+        .animation(.easeOut(duration: 0.2), value: app.toast)
         .onKeyPress(phases: .down) { press in
-            guard press.modifiers.isEmpty, press.characters == "c", !isEditingText else { return .ignored }
-            app.creation = CreationRequest(projectID: currentProjectID)
-            return .handled
+            guard !press.modifiers.contains(.command), !isEditingText else { return .ignored }
+            switch press.characters {
+            case "c":
+                guard press.modifiers.isEmpty else { return .ignored }
+                app.creation = CreationRequest(projectID: currentProjectID)
+                return .handled
+            case "?":
+                app.showingShortcuts = true
+                return .handled
+            default:
+                return .ignored
+            }
         }
     }
 

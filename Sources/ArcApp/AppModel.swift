@@ -60,6 +60,9 @@ final class AppModel {
     /// The ticket the keyboard (or a click) last targeted in a list or board.
     var selectedTicketID: String?
     var pendingDeletion: String?
+    var showingShortcuts = false
+    private(set) var toast: Toast?
+    @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     /// Bumped to ask the visible ticket list to toggle between list and board.
     private(set) var layoutToggleRequests = 0
@@ -72,6 +75,18 @@ final class AppModel {
 
     func start() {
         feed.start()
+    }
+
+    /// Shows a short confirmation in the corner of the window.
+    func showToast(_ message: String) {
+        let toast = Toast(message: message)
+        self.toast = toast
+        toastTask?.cancel()
+        toastTask = Task {
+            try? await Task.sleep(for: .seconds(2.5))
+            guard !Task.isCancelled else { return }
+            if self.toast?.id == toast.id { self.toast = nil }
+        }
     }
 
     func requestLayoutToggle() { layoutToggleRequests += 1 }
@@ -176,12 +191,21 @@ struct PresentedError: Identifiable {
     let message: String
 }
 
+struct Toast: Identifiable, Equatable {
+    let id = UUID()
+    var message: String
+}
+
 struct CreationRequest: Identifiable {
     let id = UUID()
     var projectID: String?
     var kind: TicketKind = .task
     var parentID: String?
     var epicID: String?
+    var status: TicketStatus = .todo
+    var priority: TicketPriority = .none
+    /// Set when the form was reopened by "Create more": the toggle starts on.
+    var createMore = false
 }
 
 struct ProjectEditorRequest: Identifiable {

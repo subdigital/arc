@@ -67,6 +67,13 @@ struct ArcApp: App {
             }
         }
 
+        .commands {
+            CommandGroup(replacing: .help) {
+                Button("Keyboard Shortcuts") { model?.showingShortcuts = true }
+                    .keyboardShortcut("/", modifiers: [.command, .shift])
+            }
+        }
+
         Settings {
             if let model {
                 SettingsView().environment(model).preferredColorScheme(.dark)
