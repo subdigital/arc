@@ -72,23 +72,23 @@
 ## 6. App shell and theme (ArcApp)
 
 - [ ] 6.1 Create the `@main` App with an app delegate that forces `darkAqua`, `.preferredColorScheme(.dark)` on every scene, and `AppModel` holding the `ArcStore`. Verify that the app launches dark while macOS is in Light mode.
-- [ ] 6.2 Implement the `Theme` color and font tokens from design.md §7, plus the custom status and priority glyph views. Verify with a SwiftUI preview or debug gallery that shows all 6 status glyphs and 5 priority glyphs matching the app-appearance tables.
-- [ ] 6.3 Implement `ChangeFeed`: in-process `DatabaseRegionObservation`, the distributed notification listener, and the `PRAGMA data_version` poll every 1 s (paused while inactive), debounced to 100 ms. Verify with a unit test that a write from a second `ArcStore` makes the feed tick within 2 s.
+- [x] 6.2 Implement the `Theme` color and font tokens from design.md §7, plus the custom status and priority glyph views. Verify with a SwiftUI preview or debug gallery that shows all 6 status glyphs and 5 priority glyphs matching the app-appearance tables.
+- [x] 6.3 Implement `ChangeFeed`: in-process `DatabaseRegionObservation`, the distributed notification listener, and the `PRAGMA data_version` poll every 1 s (paused while inactive), debounced to 100 ms. Verify with a unit test that a write from a second `ArcStore` makes the feed tick within 2 s.
 - [ ] 6.4 Implement the window layout:
   - `NavigationSplitView` with the sidebar (All Tasks, Epics, active projects sorted alphabetically, and a collapsed Archived section)
   - project create, rename and archive from the sidebar context menu
   - the first-run empty state with "Create Project"
 
   Verify manually against the sidebar and empty-state scenarios.
-- [ ] 6.5 Implement `scripts/bundle.sh`. It builds a release, assembles `build/Arc.app` with `Contents/MacOS/ArcApp`, `Contents/Helpers/arc`, `Info.plist` (bundle ID `com.ficklebits.arc`) and a placeholder icon, then signs it ad hoc. Verify that `scripts/bundle.sh && open build/Arc.app` launches the app.
+- [x] 6.5 Implement `scripts/bundle.sh`. It builds a release, assembles `build/Arc.app` with `Contents/MacOS/ArcApp`, `Contents/Helpers/arc`, `Info.plist` (bundle ID `com.ficklebits.arc`) and a placeholder icon, then signs it ad hoc. Verify that `scripts/bundle.sh && open build/Arc.app` launches the app.
 
 ## 7. Markdown rendering (ArcMarkdown)
 
-- [ ] 7.1 Build the render model: parse with swift-markdown (GFM) into `Sendable` `[MarkdownBlock]` covering headings, paragraphs, nested lists, task items with source ranges, code blocks with language, tables with alignment, quotes, rules and images. Inline runs are `AttributedString` (bold, italic, strikethrough, code, links, autolinks). Raw HTML is kept as literal text. Verify with `ArcMarkdownTests` fixtures for each block type, nesting and alignment.
-- [ ] 7.2 Implement task toggling with `MarkdownSource.toggleTask(at:)`, which flips only the `[ ]`/`[x]` at the range and checks the range again if the source has changed. Verify with tests that the rest of the source is byte-identical after a toggle, including nested and numbered task items.
-- [ ] 7.3 Implement ARC identifier linking. It turns `ARC-\d+` (any case) into `arc://ticket/<n>` links, only for known numbers and never inside code spans or blocks. Verify with tests covering a known ID, an unknown ID, inline code and a fenced block.
-- [ ] 7.4 Implement the `CodeHighlighter` protocol with a HighlightSwift backend: lazy, off the main actor, cached by (language, code), with a dark theme mapped to Theme tokens, and a plain fallback for no or unknown language. Verify with tests that `swift` produces several colored runs and that `nosuchlang` returns plain text.
-- [ ] 7.5 Implement the `ImageLoader` actor: `URLSession` plus an `NSCache` for the session, with `file:` URLs and absolute paths read from disk. Verify with tests using a `file:` fixture and a URL that fails, which must produce a failure state for the alt-text placeholder.
+- [x] 7.1 Build the render model: parse with swift-markdown (GFM) into `Sendable` `[MarkdownBlock]` covering headings, paragraphs, nested lists, task items with source ranges, code blocks with language, tables with alignment, quotes, rules and images. Inline runs are `AttributedString` (bold, italic, strikethrough, code, links, autolinks). Raw HTML is kept as literal text. Verify with `ArcMarkdownTests` fixtures for each block type, nesting and alignment.
+- [x] 7.2 Implement task toggling with `MarkdownSource.toggleTask(at:)`, which flips only the `[ ]`/`[x]` at the range and checks the range again if the source has changed. Verify with tests that the rest of the source is byte-identical after a toggle, including nested and numbered task items.
+- [x] 7.3 Implement ARC identifier linking. It turns `ARC-\d+` (any case) into `arc://ticket/<n>` links, only for known numbers and never inside code spans or blocks. Verify with tests covering a known ID, an unknown ID, inline code and a fenced block.
+- [x] 7.4 Implement the `CodeHighlighter` protocol with a HighlightSwift backend: lazy, off the main actor, cached by (language, code), with a dark theme mapped to Theme tokens, and a plain fallback for no or unknown language. Verify with tests that `swift` produces several colored runs and that `nosuchlang` returns plain text.
+- [x] 7.5 Implement the `ImageLoader` actor: `URLSession` plus an `NSCache` for the session, with `file:` URLs and absolute paths read from disk. Verify with tests using a `file:` fixture and a URL that fails, which must produce a failure state for the alt-text placeholder.
 - [ ] 7.6 Implement `MarkdownView` in SwiftUI with Markdown styling from the Theme:
   - headings stepping down in size, links in the accent color
   - code blocks on the elevated surface, scrolling horizontally, with a copy button
@@ -101,7 +101,7 @@
 
 ## 8. Ticket views (ArcApp)
 
-- [ ] 8.1 Implement `TicketListModel`: the query built from the sidebar selection plus filters (projects in All Tasks, epic, priority, show subtasks/canceled), refetching on `ChangeFeed`. View settings are kept per sidebar entry in `@AppStorage`. Verify with unit tests of query construction and the persistence round-trip.
+- [x] 8.1 Implement `TicketListModel`: the query built from the sidebar selection plus filters (projects in All Tasks, epic, priority, show subtasks/canceled), refetching on `ChangeFeed`. View settings are kept per sidebar entry in `@AppStorage`. Verify with unit tests of query construction and the persistence round-trip.
 - [ ] 8.2 Implement the status-grouped list:
   - collapsible headers with glyph and count, hiding empty groups, with Done and Canceled collapsed by default
   - Linear-style rows with the fields in spec order and indented subtasks
@@ -133,6 +133,6 @@
 
 ## 10. Integration verification
 
-- [ ] 10.1 Run the full suite with `swift test`. Verify that it passes with no warnings under Swift 6 strict concurrency.
+- [x] 10.1 Run the full suite with `swift test`. Verify that it passes with no warnings under Swift 6 strict concurrency.
 - [ ] 10.2 With the bundled app open on the board, have an agent session (MCP registered) create a ticket, move it to In Progress and comment on it. Verify that each change appears in the app within 2 seconds and that the comment shows the agent badge.
 - [ ] 10.3 Walk through the issue-views and app-appearance spec scenarios in the bundled app. Fix any mismatches and record the results in the PR description.

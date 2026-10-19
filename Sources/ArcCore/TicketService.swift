@@ -108,6 +108,7 @@ extension ArcStore {
 
     // MARK: - Create
 
+    @discardableResult
     public func createTicket(_ new: NewTicket) async throws -> Ticket {
         let timestamp = now()
         return try await write { db in

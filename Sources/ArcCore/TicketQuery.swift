@@ -182,6 +182,11 @@ extension ArcStore {
         return try TicketSummary.fetchAll(db, sql: sql, arguments: arguments)
     }
 
+    /// Every existing ticket number (used to decide which `ARC-n` references are real).
+    public func ticketNumbers() async throws -> Set<Int> {
+        try await read { db in Set(try Int.fetchAll(db, sql: "SELECT number FROM ticket")) }
+    }
+
     public func ticketSummary(id: String) async throws -> TicketSummary {
         try await read { db in
             guard let summary = try TicketSummary.fetchOne(db, sql: Self.summarySQL + "\nWHERE ticket.id = ?", arguments: [id]) else {
