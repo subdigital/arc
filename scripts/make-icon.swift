@@ -9,22 +9,20 @@ func render(size: Int) -> Data {
         let inset = scale * 0.08
         let body = rect.insetBy(dx: inset, dy: inset)
         let path = NSBezierPath(roundedRect: body, xRadius: scale * 0.22, yRadius: scale * 0.22)
-        NSGradient(colors: [NSColor(red: 0.43, green: 0.47, blue: 0.90, alpha: 1), NSColor(red: 0.30, green: 0.34, blue: 0.74, alpha: 1)])!
+        NSGradient(colors: [NSColor(red: 0.16, green: 0.16, blue: 0.20, alpha: 1), NSColor(red: 0.06, green: 0.06, blue: 0.08, alpha: 1)])!
             .draw(in: path, angle: -90)
+        NSColor(white: 1, alpha: 0.08).setStroke()
+        path.lineWidth = max(1, scale * 0.006)
+        path.stroke()
 
-        // A status-style circle with a check mark.
-        let circle = NSBezierPath(ovalIn: body.insetBy(dx: scale * 0.22, dy: scale * 0.22))
-        NSColor.white.withAlphaComponent(0.95).setStroke()
-        circle.lineWidth = scale * 0.045
-        circle.stroke()
-        let check = NSBezierPath()
-        check.move(to: NSPoint(x: scale * 0.37, y: scale * 0.50))
-        check.line(to: NSPoint(x: scale * 0.46, y: scale * 0.40))
-        check.line(to: NSPoint(x: scale * 0.64, y: scale * 0.61))
-        check.lineWidth = scale * 0.055
-        check.lineCapStyle = .round
-        check.lineJoinStyle = .round
-        check.stroke()
+        // A simple arc in the accent color.
+        let center = NSPoint(x: scale * 0.5, y: scale * 0.29)
+        let arc = NSBezierPath()
+        arc.appendArc(withCenter: center, radius: scale * 0.30, startAngle: 20, endAngle: 160)
+        arc.lineWidth = scale * 0.085
+        arc.lineCapStyle = .round
+        NSColor(red: 0.45, green: 0.50, blue: 0.95, alpha: 1).setStroke()
+        arc.stroke()
         return true
     }
     let tiff = image.tiffRepresentation!

@@ -6,6 +6,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillFinishLaunching(_ notification: Notification) {
         // Always dark, whatever the system appearance is; this also covers sheets, menus and popovers.
         NSApp.appearance = NSAppearance(named: .darkAqua)
+        // Launched outside a .app bundle (swift run, or Xcode running the bare executable), the
+        // process defaults to a background policy: no Dock icon, no key window, no keyboard focus.
+        NSApp.setActivationPolicy(.regular)
+    }
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
