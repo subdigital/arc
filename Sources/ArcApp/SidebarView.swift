@@ -29,9 +29,13 @@ struct SidebarView: View {
                     Button {
                         app.projectEditor = ProjectEditorRequest(mode: .create)
                     } label: {
-                        Image(systemName: "plus").font(.system(size: 10, weight: .semibold))
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .semibold))
+                            .frame(width: 24, height: 24)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .padding(.trailing, 6)
                     .help("New project")
                     .accessibilityLabel("New project")
                 }

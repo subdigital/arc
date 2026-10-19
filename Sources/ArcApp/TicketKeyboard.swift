@@ -33,6 +33,7 @@ struct TicketKeyboardNavigation: ViewModifier {
     }
 
     private func handle(_ press: KeyPress) -> KeyPress.Result {
+        guard !isEditingText else { return .ignored }
         let id = app.selectedTicketID
 
         if press.modifiers.contains(.command) {

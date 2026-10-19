@@ -1,3 +1,4 @@
+import AppKit
 import ArcCore
 import SwiftUI
 
@@ -46,7 +47,7 @@ struct MainWindow: View {
             return .systemAction
         })
         .onKeyPress(phases: .down) { press in
-            guard press.modifiers.isEmpty, press.characters == "c" else { return .ignored }
+            guard press.modifiers.isEmpty, press.characters == "c", !isEditingText else { return .ignored }
             app.creation = CreationRequest(projectID: currentProjectID)
             return .handled
         }
@@ -92,4 +93,10 @@ private struct ContentRoot: View {
         case .epics: EpicsOverview()
         }
     }
+}
+
+/// True while a text field or text editor has keyboard focus; bare-letter shortcuts must not fire then.
+@MainActor
+var isEditingText: Bool {
+    NSApp.keyWindow?.firstResponder is NSText
 }
