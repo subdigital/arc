@@ -2,8 +2,8 @@
 
 ## 1. Repository scaffolding
 
-- [ ] 1.1 Initialize the git repository. Add a `.gitignore` covering `.build/`, `build/` and `.swiftpm/`, plus a README stub with build and run instructions. Verify that `git status` is clean after the first commit.
-- [ ] 1.2 Create `Package.swift` with:
+- [x] 1.1 Initialize the git repository. Add a `.gitignore` covering `.build/`, `build/` and `.swiftpm/`, plus a README stub with build and run instructions. Verify that `git status` is clean after the first commit.
+- [x] 1.2 Create `Package.swift` with:
   - macOS 26, Swift 6 language mode
   - targets `ArcCore`, `ArcAgentKit`, `ArcMarkdown`, `arc` (executable) and `ArcApp` (executable), plus test targets `ArcCoreTests`, `ArcAgentKitTests` and `ArcMarkdownTests`
   - pinned dependencies: GRDB.swift, swift-argument-parser, modelcontextprotocol/swift-sdk, swift-markdown and HighlightSwift
@@ -12,45 +12,45 @@
 
 ## 2. Persistence foundation (ArcCore)
 
-- [ ] 2.1 Implement database opening:
+- [x] 2.1 Implement database opening:
   - Resolve the path from `ARC_DB_PATH`, defaulting to `~/Library/Application Support/Arc/arc.sqlite`.
   - Create the directory if it does not exist.
   - Configure `DatabasePool` with WAL, `foreign_keys`, a 5 s busy timeout and immediate write transactions.
 
   Verify with tests that the file is created at the override path and that `PRAGMA journal_mode` returns `wal`.
-- [ ] 2.2 Write migration `v1` with the `meta`, `project`, `ticket` and `comment` tables, their indexes and foreign-key actions, as given in design.md §3. Seed `next_ticket_number = 1`. Verify with a migration test on an empty DB.
-- [ ] 2.3 Refuse to open a database with unknown applied migrations, returning `ArcError.schemaTooNew`. Verify with a test that inserts a fake future migration ID.
-- [ ] 2.4 Define the `ArcError` codes and the `Codable` DTOs (`ProjectDTO`, `TicketDTO`, `CommentDTO`, epic progress) with a shared JSON encoder (ISO-8601 dates, sorted keys). Verify with a snapshot test of encoded fixtures.
+- [x] 2.2 Write migration `v1` with the `meta`, `project`, `ticket` and `comment` tables, their indexes and foreign-key actions, as given in design.md §3. Seed `next_ticket_number = 1`. Verify with a migration test on an empty DB.
+- [x] 2.3 Refuse to open a database with unknown applied migrations, returning `ArcError.schemaTooNew`. Verify with a test that inserts a fake future migration ID.
+- [x] 2.4 Define the `ArcError` codes and the `Codable` DTOs (`ProjectDTO`, `TicketDTO`, `CommentDTO`, epic progress) with a shared JSON encoder (ISO-8601 dates, sorted keys). Verify with a snapshot test of encoded fixtures.
 
 ## 3. Domain rules and services (ArcCore)
 
-- [ ] 3.1 Implement the project service: create, update, archive/unarchive and delete, with case-insensitive unique names. Verify with tests covering a duplicate-name `conflict` and that delete cascades to tickets and comments.
-- [ ] 3.2 Implement ticket creation:
+- [x] 3.1 Implement the project service: create, update, archive/unarchive and delete, with case-insensitive unique names. Verify with tests covering a duplicate-name `conflict` and that delete cascades to tickets and comments.
+- [x] 3.2 Implement ticket creation:
   - Allocate a global number from `meta` inside the write transaction.
   - Default the status to Todo and the priority to None.
   - Reject blank titles and missing projects.
   - Validate the epic (same project) and the parent (must be a task; the subtask takes the parent's project).
 
   Verify with tests covering consecutive numbers across projects and every validation error.
-- [ ] 3.3 Implement ticket update with a `TicketPatch`. It sets `updated_at`, sets `completed_at` on entering Done/Canceled and clears it on reopening. Moving a task between projects moves its subtasks and clears a cross-project epic; moving an epic moves its tasks. Verify with tests for each spec scenario in the work-items move and completion requirements.
-- [ ] 3.4 Implement manual ordering with fractional `sort_key`: top on status change, before/after a neighbor, and renormalizing the bucket when the gap falls below 1e-6. Verify with tests for the reorder scenario and forced renormalization.
-- [ ] 3.5 Implement deletion. Deleting a task cascades to its subtasks, deleting an epic clears its tasks' `epic_id`, and numbers are never reused. Verify with tests: deleting ARC-9 means the next ticket is ARC-10.
-- [ ] 3.6 Implement comments: add a comment with author `user` or `agent`, reject blank bodies, and list oldest first. Add `updateComment(id, body:)` for task-list toggles; it also rejects blank bodies. Verify with tests.
-- [ ] 3.7 Implement `TicketQuery` filters:
+- [x] 3.3 Implement ticket update with a `TicketPatch`. It sets `updated_at`, sets `completed_at` on entering Done/Canceled and clears it on reopening. Moving a task between projects moves its subtasks and clears a cross-project epic; moving an epic moves its tasks. Verify with tests for each spec scenario in the work-items move and completion requirements.
+- [x] 3.4 Implement manual ordering with fractional `sort_key`: top on status change, before/after a neighbor, and renormalizing the bucket when the gap falls below 1e-6. Verify with tests for the reorder scenario and forced renormalization.
+- [x] 3.5 Implement deletion. Deleting a task cascades to its subtasks, deleting an epic clears its tasks' `epic_id`, and numbers are never reused. Verify with tests: deleting ARC-9 means the next ticket is ARC-10.
+- [x] 3.6 Implement comments: add a comment with author `user` or `agent`, reject blank bodies, and list oldest first. Add `updateComment(id, body:)` for task-list toggles; it also rejects blank bodies. Verify with tests.
+- [x] 3.7 Implement `TicketQuery` filters:
   - project(s), kind, statuses, priorities, epic and parent
   - a text query over title, description and identifier
   - include-closed and limit
   - ordering by status order, then `sort_key`
 
   Also implement epic progress, which excludes Canceled. Verify with tests for each filter and the progress example (2 of 3).
-- [ ] 3.8 Implement lenient reference parsing:
+- [x] 3.8 Implement lenient reference parsing:
   - tickets: `ARC-12`, `arc-12` or `12`
   - projects: names, ignoring case
   - statuses: `In Progress`, `in-progress` or `in_progress`
   - priorities
 
   A `not_found` for a project lists the existing project names. Verify with table-driven tests.
-- [ ] 3.9 Add a concurrency test: two `ArcStore` instances on the same file create 100 tickets in parallel tasks. Verify that all 200 exist with unique numbers 1–200.
+- [x] 3.9 Add a concurrency test: two `ArcStore` instances on the same file create 100 tickets in parallel tasks. Verify that all 200 exist with unique numbers 1–200.
 
 ## 4. CLI (`arc`)
 
