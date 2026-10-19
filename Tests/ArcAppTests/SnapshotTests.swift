@@ -130,7 +130,7 @@ import Testing
                 ForEach(model.listGroups) { group in
                     GroupHeader(group: group, isCollapsed: false) {}
                     ForEach(group.rows) { row in
-                        TicketRowView(item: row, showProject: true, isSelected: row.summary.ticket.title == "Build footer")
+                        TicketRowView(item: row, showProject: true, isSelected: row.summary.ticket.title == "Build footer", isChecked: false, order: [])
                     }
                 }
             }

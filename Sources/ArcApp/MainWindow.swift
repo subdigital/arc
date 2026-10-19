@@ -27,15 +27,16 @@ struct MainWindow: View {
             Alert(title: Text("Something went wrong"), message: Text(error.message), dismissButton: .default(Text("OK")))
         }
         .confirmationDialog(
-            "Delete this ticket?",
-            isPresented: Binding(get: { app.pendingDeletion != nil }, set: { if !$0 { app.pendingDeletion = nil } }),
+            app.pendingDeletionIDs.count > 1 ? "Delete \(app.pendingDeletionIDs.count) tickets?" : "Delete this ticket?",
+            isPresented: Binding(get: { !app.pendingDeletionIDs.isEmpty }, set: { if !$0 { app.pendingDeletionIDs = [] } }),
             titleVisibility: .visible
         ) {
             Button("Delete", role: .destructive) {
-                if let id = app.pendingDeletion { Task { await app.delete(ticket: id) } }
-                app.pendingDeletion = nil
+                let ids = app.pendingDeletionIDs
+                app.pendingDeletionIDs = []
+                Task { await app.bulkDelete(ids) }
             }
-            Button("Cancel", role: .cancel) { app.pendingDeletion = nil }
+            Button("Cancel", role: .cancel) { app.pendingDeletionIDs = [] }
         } message: {
             Text("Deleting a task also deletes its subtasks and all comments. This cannot be undone.")
         }
@@ -60,20 +61,6 @@ struct MainWindow: View {
         }
         .animation(.easeOut(duration: 0.15), value: app.showingShortcuts)
         .animation(.easeOut(duration: 0.2), value: app.toast)
-        .onKeyPress(phases: .down) { press in
-            guard !press.modifiers.contains(.command), !isEditingText else { return .ignored }
-            switch press.characters {
-            case "c":
-                guard press.modifiers.isEmpty else { return .ignored }
-                app.creation = CreationRequest(projectID: currentProjectID)
-                return .handled
-            case "?":
-                app.showingShortcuts = true
-                return .handled
-            default:
-                return .ignored
-            }
-        }
     }
 
     private var currentProjectID: String? {

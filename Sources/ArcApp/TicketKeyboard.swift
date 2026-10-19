@@ -37,11 +37,15 @@ struct TicketKeyboardNavigation: ViewModifier {
         let id = app.selectedTicketID
 
         if press.modifiers.contains(.command) {
-            if press.key == .delete, let id {
-                app.pendingDeletion = id
+            if press.key == .delete, !app.actionTargets.isEmpty {
+                app.pendingDeletionIDs = app.actionTargets
                 return .handled
             }
             return .ignored
+        }
+        if press.key == .escape, !app.checkedTicketIDs.isEmpty {
+            app.checkedTicketIDs = []
+            return .handled
         }
         guard press.modifiers.isEmpty else { return .ignored }
 
@@ -58,11 +62,16 @@ struct TicketKeyboardNavigation: ViewModifier {
         switch press.characters {
         case "j": return select(model.neighbor(of: id, offset: 1))
         case "k": return select(model.neighbor(of: id, offset: -1))
+        case "x":
+            if let id { app.toggleChecked(id) }
+            return .handled
         case "s":
-            if let id { app.picker = PickerRequest(ticketID: id, kind: .status) }
+            let targets = app.actionTargets
+            if !targets.isEmpty { app.picker = PickerRequest(ticketIDs: targets, kind: .status) }
             return .handled
         case "p":
-            if let id { app.picker = PickerRequest(ticketID: id, kind: .priority) }
+            let targets = app.actionTargets
+            if !targets.isEmpty { app.picker = PickerRequest(ticketIDs: targets, kind: .priority) }
             return .handled
         default: return .ignored
         }
@@ -70,14 +79,7 @@ struct TicketKeyboardNavigation: ViewModifier {
 
     private func choose(_ index: Int, for request: PickerRequest) {
         app.picker = nil
-        Task {
-            switch request.kind {
-            case .status:
-                if let status = TicketStatus.allCases[safe: index] { await app.setStatus(status, for: request.ticketID) }
-            case .priority:
-                if let priority = TicketPriority.menuOrder[safe: index] { await app.setPriority(priority, for: request.ticketID) }
-            }
-        }
+        Task { await app.applyPick(index, for: request) }
     }
 }
 

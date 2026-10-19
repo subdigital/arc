@@ -1,3 +1,4 @@
+import AppKit
 import ArcCore
 import SwiftUI
 import UniformTypeIdentifiers
@@ -93,6 +94,7 @@ struct BoardCardView: View {
 
     private var ticket: Ticket { summary.ticket }
     private var isSelected: Bool { app.selectedTicketID == ticket.id }
+    private var isChecked: Bool { app.checkedTicketIDs.contains(ticket.id) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -146,10 +148,10 @@ struct BoardCardView: View {
             }
         }
         .padding(10)
-        .background(hovering ? Theme.bgHover : Theme.bgElevated, in: RoundedRectangle(cornerRadius: 6))
+        .background(isChecked ? Theme.accent.opacity(0.18) : (hovering ? Theme.bgHover : Theme.bgElevated), in: RoundedRectangle(cornerRadius: 6))
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .strokeBorder(isSelected ? Theme.accent : Theme.border, lineWidth: isSelected ? 1.5 : 1)
+                .strokeBorder(isSelected || isChecked ? Theme.accent : Theme.border, lineWidth: isSelected || isChecked ? 1.5 : 1)
         )
         .overlay(alignment: dropEdge == .top ? .top : .bottom) {
             if dropEdge != nil {
@@ -161,7 +163,11 @@ struct BoardCardView: View {
         .onHover { hovering = $0 }
         .onTapGesture {
             app.selectedTicketID = ticket.id
-            app.open(ticket: ticket.id)
+            if NSEvent.modifierFlags.contains(.command) {
+                app.toggleChecked(ticket.id)
+            } else {
+                app.open(ticket: ticket.id)
+            }
         }
         .draggable(TicketDragItem(id: ticket.id))
         .dropDestination(for: TicketDragItem.self) { items, location in

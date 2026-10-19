@@ -1,3 +1,4 @@
+import AppKit
 import ArcCore
 import SwiftUI
 
@@ -16,7 +17,9 @@ struct TicketListView: View {
                                     TicketRowView(
                                         item: row,
                                         showProject: model.scope == .allTasks,
-                                        isSelected: app.selectedTicketID == row.id
+                                        isSelected: app.selectedTicketID == row.id,
+                                        isChecked: app.checkedTicketIDs.contains(row.id),
+                                        order: model.navigationOrder
                                     )
                                     .id(row.id)
                                 }
@@ -73,19 +76,23 @@ struct TicketRowView: View {
     let item: TicketRowItem
     let showProject: Bool
     let isSelected: Bool
+    let isChecked: Bool
+    let order: [String]
     @State private var hovering = false
+    @State private var picker: PickerRequest.Kind?
 
     private var summary: TicketSummary { item.summary }
     private var ticket: Ticket { summary.ticket }
 
     var body: some View {
         HStack(spacing: 8) {
-            PriorityGlyph(priority: ticket.priority)
+            checkbox
+            glyphButton(.priority) { PriorityGlyph(priority: ticket.priority) }
             Text(ticket.identifier)
                 .font(Theme.metaFont.monospacedDigit())
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 52, alignment: .leading)
-            StatusGlyph(status: ticket.status)
+            glyphButton(.status) { StatusGlyph(status: ticket.status) }
             Text(ticket.title)
                 .font(Theme.rowFont)
                 .foregroundStyle(Theme.textPrimary)
@@ -125,22 +132,66 @@ struct TicketRowView: View {
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 48, alignment: .trailing)
         }
-        .padding(.leading, item.isNested ? 40 : 14)
+        .padding(.leading, item.isNested ? 40 : 10)
         .padding(.trailing, 14)
         .frame(height: Theme.rowHeight)
-        .background(isSelected ? Theme.bgSelected : (hovering ? Theme.bgHover : Color.clear))
+        .background(isChecked ? Theme.accent.opacity(0.18) : (isSelected ? Theme.bgSelected : (hovering ? Theme.bgHover : Color.clear)))
         .overlay(alignment: .leading) {
             if isSelected { Rectangle().fill(Theme.accent).frame(width: 2) }
         }
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture {
-            app.selectedTicketID = ticket.id
-            app.open(ticket: ticket.id)
-        }
+        .onTapGesture { click() }
         .ticketContextMenu(summary)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(ticket.identifier), \(ticket.title), \(ticket.status.displayName), \(ticket.priority.displayName) priority")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var checkbox: some View {
+        Button {
+            app.selectedTicketID = ticket.id
+            app.toggleChecked(ticket.id)
+        } label: {
+            Image(systemName: isChecked ? "checkmark.square.fill" : "square")
+                .font(.system(size: 13))
+                .foregroundStyle(isChecked ? Theme.accent : Theme.textTertiary)
+                .frame(width: 16, height: 20)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(isChecked || hovering || !app.checkedTicketIDs.isEmpty ? 1 : 0)
+        .help("Select (X)")
+        .accessibilityLabel(isChecked ? "Deselect \(ticket.identifier)" : "Select \(ticket.identifier)")
+    }
+
+    /// A glyph that opens the status/priority picker when clicked.
+    private func glyphButton<Glyph: View>(_ kind: PickerRequest.Kind, @ViewBuilder _ glyph: () -> Glyph) -> some View {
+        Button {
+            picker = kind
+        } label: {
+            glyph().padding(3).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(kind == .status ? "Change status" : "Change priority")
+        .popover(isPresented: Binding(get: { picker == kind }, set: { if !$0 { picker = nil } }), arrowEdge: .bottom) {
+            let request = PickerRequest(ticketIDs: [ticket.id], kind: kind)
+            PickerPopover(request: request) { index in
+                picker = nil
+                Task { await app.applyPick(index, for: request) }
+            }
+        }
+    }
+
+    private func click() {
+        app.selectedTicketID = ticket.id
+        let modifiers = NSEvent.modifierFlags
+        if modifiers.contains(.shift) {
+            app.checkRange(to: ticket.id, order: order)
+        } else if modifiers.contains(.command) {
+            app.toggleChecked(ticket.id)
+        } else {
+            app.open(ticket: ticket.id)
+        }
     }
 }

@@ -59,6 +59,14 @@ struct ArcApp: App {
                 }
                 .keyboardShortcut("n", modifiers: [.command, .shift])
             }
+            CommandGroup(after: .sidebar) {
+                Button("Back") { model?.navigateBack() }
+                    .keyboardShortcut("[")
+                    .disabled(!(model?.canGoBack ?? false))
+                Button("Forward") { model?.navigateForward() }
+                    .keyboardShortcut("]")
+                    .disabled(!(model?.canGoForward ?? false))
+            }
             CommandGroup(after: .toolbar) {
                 Button("Switch Between List and Board") {
                     model?.requestLayoutToggle()

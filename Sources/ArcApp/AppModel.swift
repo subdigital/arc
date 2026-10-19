@@ -27,10 +27,16 @@ enum Route: Hashable, Sendable {
 /// Which ticket property picker the keyboard asked for (S / P).
 struct PickerRequest: Equatable, Identifiable {
     enum Kind { case status, priority }
-    var ticketID: String
+    var ticketIDs: [String]
     var kind: Kind
 
-    var id: String { "\(ticketID)-\(kind)" }
+    var id: String { "\(ticketIDs.joined(separator: ","))-\(kind)" }
+}
+
+/// A place in the app's navigation history.
+struct NavigationState: Equatable {
+    var selection: SidebarSelection
+    var path: [Route]
 }
 
 @MainActor
@@ -41,9 +47,51 @@ final class AppModel {
     let settingsStore: ViewSettingsStore
 
     var selection: SidebarSelection = .allTasks {
-        didSet { if selection != oldValue { path = [] } }
+        didSet {
+            if selection != oldValue { path = []; checkedTicketIDs = [] }
+            recordNavigation()
+        }
     }
-    var path: [Route] = []
+    var path: [Route] = [] {
+        didSet { recordNavigation() }
+    }
+
+    // MARK: Navigation history (Back / Forward)
+
+    @ObservationIgnored private var history = [NavigationState(selection: .allTasks, path: [])]
+    @ObservationIgnored private var historyIndex = 0
+    @ObservationIgnored private var isRestoringHistory = false
+    private(set) var canGoBack = false
+    private(set) var canGoForward = false
+
+    private func recordNavigation() {
+        guard !isRestoringHistory else { return }
+        let state = NavigationState(selection: selection, path: path)
+        guard state != history[historyIndex] else { return }
+        history.removeSubrange((historyIndex + 1)...)
+        history.append(state)
+        if history.count > 200 { history.removeFirst() }
+        historyIndex = history.count - 1
+        updateHistoryFlags()
+    }
+
+    private func updateHistoryFlags() {
+        canGoBack = historyIndex > 0
+        canGoForward = historyIndex < history.count - 1
+    }
+
+    func navigateBack() { restore(historyIndex - 1) }
+    func navigateForward() { restore(historyIndex + 1) }
+
+    private func restore(_ index: Int) {
+        guard history.indices.contains(index) else { return }
+        historyIndex = index
+        isRestoringHistory = true
+        selection = history[index].selection
+        path = history[index].path
+        isRestoringHistory = false
+        updateHistoryFlags()
+    }
 
     private(set) var projects: [Project] = []
     private(set) var archivedProjects: [Project] = []
@@ -59,9 +107,18 @@ final class AppModel {
     var picker: PickerRequest?
     /// The ticket the keyboard (or a click) last targeted in a list or board.
     var selectedTicketID: String?
-    var pendingDeletion: String?
+    var pendingDeletionIDs: [String] = []
+    /// Convenience for the single-ticket call sites.
+    var pendingDeletion: String? {
+        get { pendingDeletionIDs.count == 1 ? pendingDeletionIDs.first : nil }
+        set { pendingDeletionIDs = newValue.map { [$0] } ?? [] }
+    }
+    /// Rows ticked for bulk actions (the cursor is `selectedTicketID`).
+    var checkedTicketIDs: Set<String> = []
+    @ObservationIgnored var selectionAnchor: String?
     var showingShortcuts = false
     private(set) var toast: Toast?
+    @ObservationIgnored private var keyMonitor: Any?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     /// Bumped to ask the visible ticket list to toggle between list and board.
@@ -75,6 +132,45 @@ final class AppModel {
 
     func start() {
         feed.start()
+        installKeyMonitor()
+    }
+
+    /// Window-level shortcuts that must work whatever has keyboard focus (and never beep):
+    /// C, ?, and browser-style Back/Forward on ⌘← / ⌘→.
+    private func installKeyMonitor() {
+        guard keyMonitor == nil else { return }
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            nonisolated(unsafe) let event = event // delivered on the main thread
+            let consumed = MainActor.assumeIsolated { self?.handle(event) ?? false }
+            return consumed ? nil : event
+        }
+    }
+
+    private func handle(_ event: NSEvent) -> Bool {
+        guard let window = NSApp.keyWindow, window.sheetParent == nil, window.attachedSheet == nil,
+              window.firstResponder as? NSText == nil, !showingShortcuts, creation == nil, projectEditor == nil
+        else { return false }
+        let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if flags == .command {
+            switch event.keyCode {
+            case 123: navigateBack(); return true      // ⌘←
+            case 124: navigateForward(); return true   // ⌘→
+            default: return false
+            }
+        }
+        guard flags.subtracting(.shift).isEmpty, let characters = event.characters else { return false }
+        switch characters {
+        case "c" where flags.isEmpty:
+            var projectID: String?
+            if case .project(let id) = selection { projectID = id }
+            creation = CreationRequest(projectID: projectID)
+            return true
+        case "?":
+            showingShortcuts = true
+            return true
+        default:
+            return false
+        }
     }
 
     /// Shows a short confirmation in the corner of the window.
@@ -174,9 +270,71 @@ final class AppModel {
     }
 
     func delete(ticket id: String) async {
+        checkedTicketIDs.remove(id)
         if await perform({ try await store.deleteTicket(id: id) }) != nil {
             path.removeAll { $0 == .ticket(id) }
             if selectedTicketID == id { selectedTicketID = nil }
+        }
+    }
+
+    // MARK: Multi-select
+
+    func toggleChecked(_ id: String) {
+        if checkedTicketIDs.contains(id) { checkedTicketIDs.remove(id) } else { checkedTicketIDs.insert(id) }
+        selectionAnchor = id
+    }
+
+    /// Ticks every row between the anchor and `id` (inclusive), in display order.
+    func checkRange(to id: String, order: [String]) {
+        guard let anchor = selectionAnchor ?? selectedTicketID,
+              let from = order.firstIndex(of: anchor), let to = order.firstIndex(of: id)
+        else { return toggleChecked(id) }
+        checkedTicketIDs.formUnion(order[min(from, to)...max(from, to)])
+    }
+
+    /// The tickets an action should apply to: the ticked rows, or else the cursor row.
+    var actionTargets: [String] {
+        if !checkedTicketIDs.isEmpty { return Array(checkedTicketIDs) }
+        return selectedTicketID.map { [$0] } ?? []
+    }
+
+    /// Applies `patch` to each ticket; reports how many could not be changed.
+    func bulkUpdate(_ ids: [String], _ patch: TicketPatch, done: String) async {
+        var failures: [String] = []
+        for id in ids {
+            do {
+                try await store.updateTicket(id: id, patch)
+            } catch {
+                failures.append((error as? ArcError)?.message ?? error.localizedDescription)
+            }
+        }
+        let succeeded = ids.count - failures.count
+        if succeeded > 0 { showToast("\(done) \(succeeded) \(succeeded == 1 ? "ticket" : "tickets")") }
+        if let first = failures.first {
+            present(ArcError.invalidArgument(failures.count == 1 ? first : "\(failures.count) tickets could not be changed. \(first)"))
+        }
+    }
+
+    func bulkDelete(_ ids: [String]) async {
+        var deleted = 0
+        for id in ids {
+            if await perform({ try await store.deleteTicket(id: id) }) != nil { deleted += 1 }
+            path.removeAll { $0 == .ticket(id) }
+        }
+        checkedTicketIDs.subtract(ids)
+        if let selected = selectedTicketID, ids.contains(selected) { selectedTicketID = nil }
+        if deleted > 0 { showToast("Deleted \(deleted) \(deleted == 1 ? "ticket" : "tickets")") }
+    }
+
+    /// Applies a status/priority picked from a `PickerPopover` to every ticket in the request.
+    func applyPick(_ index: Int, for request: PickerRequest) async {
+        switch request.kind {
+        case .status:
+            guard let status = TicketStatus.allCases[safe: index] else { return }
+            await bulkUpdate(request.ticketIDs, TicketPatch(status: status), done: "Updated")
+        case .priority:
+            guard let priority = TicketPriority.menuOrder[safe: index] else { return }
+            await bulkUpdate(request.ticketIDs, TicketPatch(priority: priority), done: "Updated")
         }
     }
 

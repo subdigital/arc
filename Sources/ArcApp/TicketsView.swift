@@ -35,6 +35,14 @@ struct TicketsView: View {
             content
         }
         .background(Theme.bgContent)
+        .overlay(alignment: .bottom) {
+            if !app.checkedTicketIDs.isEmpty {
+                BulkActionBar(model: model)
+                    .padding(.bottom, 18)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: app.checkedTicketIDs.isEmpty)
         .navigationTitle(title)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -56,6 +64,7 @@ struct TicketsView: View {
         }
         .task(id: reloadKey) {
             await model.reload()
+            app.checkedTicketIDs.formIntersection(model.tickets.map(\.id))
             await loadEpicTitle()
         }
         .onChange(of: app.layoutToggleRequests) {
@@ -228,5 +237,80 @@ struct FilterBar: View {
         .buttonStyle(.plain)
         .menuIndicator(.hidden)
         .fixedSize()
+    }
+}
+
+// MARK: - Bulk actions
+
+/// Floating bar shown while rows are ticked.
+struct BulkActionBar: View {
+    @Environment(AppModel.self) private var app
+    let model: TicketListModel
+
+    private var ids: [String] { Array(app.checkedTicketIDs) }
+    private var selected: [TicketSummary] { model.tickets.filter { app.checkedTicketIDs.contains($0.id) } }
+
+    /// Epics can only be assigned when every selected ticket is a task in one project.
+    private var epicChoices: [Ticket]? {
+        let projects = Set(selected.map(\.ticket.projectId))
+        guard projects.count == 1, selected.allSatisfy({ $0.ticket.kind == .task }), let project = projects.first else { return nil }
+        return app.epicsByProject[project] ?? []
+    }
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text("\(ids.count) selected").font(Theme.rowFont).foregroundStyle(Theme.textPrimary)
+            Rectangle().fill(Theme.border).frame(width: 1, height: 18)
+
+            Menu("Status") {
+                StatusMenuItems(current: nil) { status in
+                    Task { await app.bulkUpdate(ids, TicketPatch(status: status), done: "Updated") }
+                }
+            }
+            Menu("Priority") {
+                PriorityMenuItems(current: nil) { priority in
+                    Task { await app.bulkUpdate(ids, TicketPatch(priority: priority), done: "Updated") }
+                }
+            }
+            Menu("Project") {
+                ForEach(app.projects) { project in
+                    Button(project.name) {
+                        Task { await app.bulkUpdate(ids, TicketPatch(projectId: project.id), done: "Moved") }
+                    }
+                }
+            }
+            Menu("Epic") {
+                Button("No epic") {
+                    Task { await app.bulkUpdate(ids, TicketPatch(epicId: .set(nil)), done: "Updated") }
+                }
+                ForEach(epicChoices ?? []) { epic in
+                    Button("\(epic.identifier) \(epic.title)") {
+                        Task { await app.bulkUpdate(ids, TicketPatch(epicId: .set(epic.id)), done: "Updated") }
+                    }
+                }
+            }
+            .disabled(epicChoices == nil)
+            .help(epicChoices == nil ? "Select tasks from a single project to assign an epic" : "Assign an epic")
+
+            Button("Delete", role: .destructive) { app.pendingDeletionIDs = ids }
+            Rectangle().fill(Theme.border).frame(width: 1, height: 18)
+            Button {
+                app.checkedTicketIDs = []
+            } label: {
+                Image(systemName: "xmark").font(.system(size: 11, weight: .medium))
+            }
+            .help("Clear selection (Esc)")
+            .accessibilityLabel("Clear selection")
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .font(Theme.rowFont)
+        .foregroundStyle(Theme.textSecondary)
+        .padding(.horizontal, 16)
+        .frame(height: 42)
+        .background(Theme.bgElevated, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+        .shadow(color: .black.opacity(0.45), radius: 14, y: 5)
     }
 }
