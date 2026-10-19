@@ -47,7 +47,7 @@ let package = Package(
             dependencies: ["ArcCore", "ArcMarkdown", .product(name: "GRDB", package: "GRDB.swift")]
         ),
         .testTarget(name: "ArcCoreTests", dependencies: ["ArcCore"]),
-        .testTarget(name: "ArcAgentKitTests", dependencies: ["ArcAgentKit", "ArcCore"]),
+        .testTarget(name: "ArcAgentKitTests", dependencies: ["ArcAgentKit", "ArcCore", "arc"]),
         .testTarget(name: "ArcMarkdownTests", dependencies: ["ArcMarkdown"]),
     ],
     swiftLanguageModes: [.v6]

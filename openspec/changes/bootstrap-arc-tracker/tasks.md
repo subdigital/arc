@@ -54,12 +54,12 @@
 
 ## 4. CLI (`arc`)
 
-- [ ] 4.1 Implement the ArgumentParser root command, `GlobalOptions --json` and the output layer. In JSON mode, output is DTOs on stdout. In human mode, output is compact tables. Errors exit with code 1 (and print an error object in JSON mode); usage errors exit with code 64. Verify with an end-to-end test that runs `.build/debug/arc` with a temporary `ARC_DB_PATH`.
-- [ ] 4.2 Implement the `project list|create|update|archive|unarchive` commands. Verify with end-to-end tests and their JSON output.
-- [ ] 4.3 Implement `list` (all filters, `--all`, `--limit`) and `show`. Verify with tests that closed tickets are excluded by default and that `show` prints every field in the agent-interface JSON scenario.
-- [ ] 4.4 Implement `create` and `update`, including subtask creation with only `--parent`, and `--description -` reading stdin. Verify with end-to-end tests that pipe stdin.
-- [ ] 4.5 Implement `comment` (author `agent`, `-` reads stdin) and `delete`, which requires `--yes`. Verify with end-to-end tests, including that delete is refused without `--yes`.
-- [ ] 4.6 After each successful write, post the `com.ficklebits.arc.databaseDidChange` distributed notification. Verify with a test that observes the notification while running a CLI write.
+- [x] 4.1 Implement the ArgumentParser root command, `GlobalOptions --json` and the output layer. In JSON mode, output is DTOs on stdout. In human mode, output is compact tables. Errors exit with code 1 (and print an error object in JSON mode); usage errors exit with code 64. Verify with an end-to-end test that runs `.build/debug/arc` with a temporary `ARC_DB_PATH`.
+- [x] 4.2 Implement the `project list|create|update|archive|unarchive` commands. Verify with end-to-end tests and their JSON output.
+- [x] 4.3 Implement `list` (all filters, `--all`, `--limit`) and `show`. Verify with tests that closed tickets are excluded by default and that `show` prints every field in the agent-interface JSON scenario.
+- [x] 4.4 Implement `create` and `update`, including subtask creation with only `--parent`, and `--description -` reading stdin. Verify with end-to-end tests that pipe stdin.
+- [x] 4.5 Implement `comment` (author `agent`, `-` reads stdin) and `delete`, which requires `--yes`. Verify with end-to-end tests, including that delete is refused without `--yes`.
+- [x] 4.6 After each successful write, post the `com.ficklebits.arc.databaseDidChange` distributed notification. Verify with a test that observes the notification while running a CLI write.
 
 ## 5. MCP server and agent skill
 

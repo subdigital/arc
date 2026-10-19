@@ -82,8 +82,9 @@ public struct SubtaskProgressDTO: Codable, Sendable, Equatable {
     public var total: Int
 }
 
-/// One shape for every ticket-returning command. List results leave out `description`,
-/// `subtasks` and `comments` (nil, so omitted from the JSON); `show` and writes include them.
+/// One shape for every ticket-returning command. `epic`, `parent` and `completedAt` are always
+/// present (null when unset). List results leave out `description`, `subtasks` and `comments`
+/// entirely; `show` and writes include them.
 public struct TicketDTO: Codable, Sendable, Equatable {
     public var identifier: String
     public var kind: String
@@ -100,6 +101,30 @@ public struct TicketDTO: Codable, Sendable, Equatable {
     public var createdAt: Date
     public var updatedAt: Date
     public var completedAt: Date?
+
+    enum CodingKeys: String, CodingKey {
+        case identifier, kind, title, description, status, priority, project, epic, parent
+        case subtaskProgress, subtasks, comments, createdAt, updatedAt, completedAt
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(identifier, forKey: .identifier)
+        try container.encode(kind, forKey: .kind)
+        try container.encode(title, forKey: .title)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encode(status, forKey: .status)
+        try container.encode(priority, forKey: .priority)
+        try container.encode(project, forKey: .project)
+        try container.encode(epic, forKey: .epic)
+        try container.encode(parent, forKey: .parent)
+        try container.encodeIfPresent(subtaskProgress, forKey: .subtaskProgress)
+        try container.encodeIfPresent(subtasks, forKey: .subtasks)
+        try container.encodeIfPresent(comments, forKey: .comments)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encode(completedAt, forKey: .completedAt)
+    }
 
     public init(_ summary: TicketSummary, projectId: String) {
         let ticket = summary.ticket

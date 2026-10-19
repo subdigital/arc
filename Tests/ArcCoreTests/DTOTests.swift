@@ -42,6 +42,7 @@ import Testing
               "id" : "comment-id"
             }
           ],
+          "completedAt" : null,
           "createdAt" : "2027-01-15T08:00:00Z",
           "description" : "Needs `links`",
           "epic" : {
@@ -51,6 +52,7 @@ import Testing
           },
           "identifier" : "ARC-2",
           "kind" : "task",
+          "parent" : null,
           "priority" : "high",
           "project" : {
             "id" : "project-id",
