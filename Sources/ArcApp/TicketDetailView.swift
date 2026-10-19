@@ -8,6 +8,7 @@ struct TicketDetailView: View {
 
     @State private var detail: TicketDetail?
     @State private var tasksInProject: [Ticket] = []
+    @State private var epicTasks: [Ticket] = []
     @State private var titleDraft = ""
     @State private var descriptionDraft = ""
     @State private var isEditingDescription = false
@@ -68,6 +69,11 @@ struct TicketDetailView: View {
             var query = TicketQuery(kinds: [.task], includeClosed: true, includeArchivedProjects: true)
             query.projectIds = [loaded.ticket.projectId]
             tasksInProject = try await app.store.tickets(matching: query).map(\.ticket)
+            if loaded.ticket.kind == .epic {
+                epicTasks = try await app.store.tickets(
+                    matching: TicketQuery(kinds: [.task], epicId: loaded.ticket.id, includeClosed: true, includeArchivedProjects: true)
+                ).map(\.ticket)
+            }
         } catch let error as ArcError where error.code == .notFound {
             app.goBack() // deleted elsewhere
         } catch {
@@ -84,6 +90,7 @@ struct TicketDetailView: View {
                 titleField(detail)
                 descriptionSection(detail)
                 if detail.ticket.kind == .task { subtasksSection(detail) }
+                if detail.ticket.kind == .epic { epicTasksSection(detail) }
                 commentsSection(detail)
             }
             .padding(.horizontal, 32)
@@ -242,6 +249,36 @@ struct TicketDetailView: View {
             }
             .background(Theme.bgSidebar, in: RoundedRectangle(cornerRadius: 6))
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1))
+        }
+    }
+
+    private func epicTasksSection(_ detail: TicketDetail) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("Tasks").font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
+                let counted = epicTasks.filter { $0.status != .canceled }
+                if !counted.isEmpty {
+                    Text("\(counted.filter { $0.status == .done }.count)/\(counted.count)")
+                        .font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
+                }
+                Spacer()
+                Button {
+                    app.creation = CreationRequest(projectID: detail.ticket.projectId, epicID: detail.ticket.id)
+                } label: {
+                    Label("Add task", systemImage: "plus").font(Theme.metaFont)
+                }
+                .buttonStyle(SubtleButtonStyle())
+                .help("Add a task to this epic")
+            }
+            if !epicTasks.isEmpty {
+                VStack(spacing: 0) {
+                    ForEach(epicTasks) { task in SubtaskRow(subtask: task) }
+                }
+                .background(Theme.bgSidebar, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1))
+            } else {
+                Text("No tasks yet").font(Theme.rowFont).foregroundStyle(Theme.textTertiary)
+            }
         }
     }
 
