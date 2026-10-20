@@ -102,6 +102,7 @@ struct BoardCardView: View {
                 Text(ticket.identifier)
                     .font(Theme.metaFont.monospacedDigit())
                     .foregroundStyle(Theme.textSecondary)
+                if summary.isBlocked { BlockedBadge() }
                 Spacer()
                 PriorityGlyph(priority: ticket.priority)
             }
@@ -111,6 +112,7 @@ struct BoardCardView: View {
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
+            if !summary.labels.isEmpty { LabelChips(labels: summary.labels, limit: 2) }
             if summary.parent != nil || summary.childCount > 0 || showProject {
                 HStack(spacing: 6) {
                     if let parent = summary.parent {

@@ -73,7 +73,7 @@ struct SidebarView: View {
 
     @ViewBuilder
     private func projectMenu(_ project: Project) -> some View {
-        Button("Rename…") { app.projectEditor = ProjectEditorRequest(mode: .rename(project)) }
+        Button("Edit…") { app.projectEditor = ProjectEditorRequest(mode: .rename(project)) }
         if project.isArchived {
             Button("Unarchive") {
                 Task { await app.perform { try await app.store.setProjectArchived(id: project.id, archived: false) } }
@@ -95,7 +95,35 @@ private struct ProjectRow: View {
         Label {
             Text(project.name)
         } icon: {
-            Circle().fill(Color(hexString: project.color)).frame(width: 9, height: 9)
+            ProjectIcon(project: project)
+        }
+    }
+}
+
+/// A project's icon: its emoji or SF Symbol (Linear icon names are mapped), tinted with the project color,
+/// or the plain color dot when there is none.
+struct ProjectIcon: View {
+    let project: Project
+    var size: CGFloat = 13
+
+    private static let symbols = [
+        "Subscribe": "bell", "SouthAmerica": "globe.americas", "Sound": "waveform", "Boombox": "hifispeaker",
+        "Bitcoin": "bitcoinsign.circle", "Rocket": "paperplane", "Bug": "ladybug", "Code": "chevron.left.forwardslash.chevron.right",
+        "Database": "cylinder", "Phone": "iphone", "Mobile": "iphone", "Server": "server.rack", "Star": "star", "Heart": "heart",
+    ]
+
+    var body: some View {
+        let tint = Color(hexString: project.color)
+        if let icon = project.icon, !icon.isEmpty {
+            if let symbol = Self.symbols[icon] ?? (icon.contains(".") ? icon : nil) {
+                Image(systemName: symbol).font(.system(size: size - 2)).foregroundStyle(tint)
+            } else if icon.unicodeScalars.contains(where: { !$0.isASCII }) {
+                Text(icon).font(.system(size: size - 2))
+            } else {
+                Circle().fill(tint).frame(width: 9, height: 9)
+            }
+        } else {
+            Circle().fill(tint).frame(width: 9, height: 9)
         }
     }
 }
@@ -105,10 +133,11 @@ struct ProjectEditorSheet: View {
     @Environment(\.dismiss) private var dismiss
     let request: ProjectEditorRequest
     @State private var name = ""
+    @State private var icon = ""
     @FocusState private var focused: Bool
 
     private var title: String {
-        if case .rename = request.mode { "Rename Project" } else { "New Project" }
+        if case .rename = request.mode { "Edit Project" } else { "New Project" }
     }
 
     var body: some View {
@@ -117,6 +146,9 @@ struct ProjectEditorSheet: View {
             TextField("Project name", text: $name)
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
+                .onSubmit(save)
+            TextField("Icon (an emoji or SF Symbol name, optional)", text: $icon)
+                .textFieldStyle(.roundedBorder)
                 .onSubmit(save)
             HStack {
                 Spacer()
@@ -133,13 +165,13 @@ struct ProjectEditorSheet: View {
         .frame(width: 340)
         .background(Theme.bgElevated)
         .onAppear {
-            if case .rename(let project) = request.mode { name = project.name }
+            if case .rename(let project) = request.mode { name = project.name; icon = project.icon ?? "" }
             focused = true
         }
     }
 
     private var saveTitle: String {
-        if case .rename = request.mode { "Rename" } else { "Create" }
+        if case .rename = request.mode { "Save" } else { "Create" }
     }
 
     private func save() {
@@ -149,12 +181,12 @@ struct ProjectEditorSheet: View {
             let succeeded: Bool
             switch request.mode {
             case .create:
-                if let project = await app.perform({ try await app.store.createProject(name: trimmed) }) {
+                if let project = await app.perform({ try await app.store.createProject(name: trimmed, icon: icon.isEmpty ? nil : icon) }) {
                     app.selection = .project(project.id)
                     succeeded = true
                 } else { succeeded = false }
             case .rename(let project):
-                succeeded = await app.perform { try await app.store.updateProject(id: project.id, name: trimmed) } != nil
+                succeeded = await app.perform { try await app.store.updateProject(id: project.id, name: trimmed, icon: icon) } != nil
             }
             if succeeded { dismiss() }
         }

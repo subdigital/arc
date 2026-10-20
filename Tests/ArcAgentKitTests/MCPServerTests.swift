@@ -104,9 +104,10 @@ final class MCPSession: @unchecked Sendable {
 
         let list = try session.request("tools/list")
         let tools = try #require((list["result"] as? [String: Any])?["tools"] as? [[String: Any]])
-        #expect(tools.count == 7)
+        #expect(tools.count == 10)
         #expect(Set(tools.compactMap { $0["name"] as? String }) == [
             "list_projects", "create_project", "list_tickets", "get_ticket", "create_ticket", "update_ticket", "add_comment",
+            "add_relation", "remove_relation", "add_link",
         ])
         #expect(tools.allSatisfy { ($0["inputSchema"] as? [String: Any])?["type"] as? String == "object" })
 

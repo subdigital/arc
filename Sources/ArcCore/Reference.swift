@@ -60,7 +60,7 @@ public enum Reference {
     }
 
     /// Lowercases, trims, and turns runs of spaces/hyphens into underscores.
-    static func normalize(_ value: String) -> String {
+    public static func normalize(_ value: String) -> String {
         value.trimmingCharacters(in: .whitespacesAndNewlines)
             .lowercased()
             .replacingOccurrences(of: "[\\s-]+", with: "_", options: .regularExpression)

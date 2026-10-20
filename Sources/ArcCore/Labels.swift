@@ -15,16 +15,16 @@ extension ArcStore {
         return labelColors[Int(hash % UInt32(labelColors.count))]
     }
 
-    public func labels() async throws -> [Label] {
-        try await read { db in try Label.fetchAll(db, sql: "SELECT * FROM label ORDER BY name_key") }
+    public func labels() async throws -> [TicketLabel] {
+        try await read { db in try TicketLabel.fetchAll(db, sql: "SELECT * FROM label ORDER BY name_key") }
     }
 
-    public func labels(ticketId: String) async throws -> [Label] {
+    public func labels(ticketId: String) async throws -> [TicketLabel] {
         try await read { db in try Self.labels(db, ticketId: ticketId) }
     }
 
-    static func labels(_ db: Database, ticketId: String) throws -> [Label] {
-        try Label.fetchAll(db, sql: """
+    static func labels(_ db: Database, ticketId: String) throws -> [TicketLabel] {
+        try TicketLabel.fetchAll(db, sql: """
             SELECT label.* FROM label JOIN ticket_label ON ticket_label.label_id = label.id
             WHERE ticket_label.ticket_id = ? ORDER BY label.name_key
             """, arguments: [ticketId])
@@ -32,13 +32,13 @@ extension ArcStore {
 
     /// Finds a label by name (case-insensitive) or creates it. Labels exist on demand: there is no setup step.
     @discardableResult
-    static func findOrCreateLabel(_ db: Database, name: String, color: String? = nil, at timestamp: Date) throws -> Label {
+    static func findOrCreateLabel(_ db: Database, name: String, color: String? = nil, at timestamp: Date) throws -> TicketLabel {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw ArcError.invalidArgument("A label name is required.") }
-        if let existing = try Label.fetchOne(db, sql: "SELECT * FROM label WHERE name_key = ?", arguments: [labelKey(trimmed)]) {
+        if let existing = try TicketLabel.fetchOne(db, sql: "SELECT * FROM label WHERE name_key = ?", arguments: [labelKey(trimmed)]) {
             return existing
         }
-        let label = Label(
+        let label = TicketLabel(
             id: UUID().uuidString, name: trimmed, nameKey: labelKey(trimmed),
             color: color ?? defaultLabelColor(for: trimmed), description: "", externalId: nil, createdAt: timestamp
         )
@@ -48,7 +48,7 @@ extension ArcStore {
 
     /// Replaces the ticket's labels with `names`, creating any that do not exist yet.
     @discardableResult
-    public func setLabels(ticketId: String, names: [String]) async throws -> [Label] {
+    public func setLabels(ticketId: String, names: [String]) async throws -> [TicketLabel] {
         let timestamp = now()
         return try await write { db in
             _ = try Self.requireTicket(db, id: ticketId)
@@ -63,7 +63,7 @@ extension ArcStore {
     }
 
     @discardableResult
-    public func addLabel(ticketId: String, name: String) async throws -> [Label] {
+    public func addLabel(ticketId: String, name: String) async throws -> [TicketLabel] {
         let timestamp = now()
         return try await write { db in
             _ = try Self.requireTicket(db, id: ticketId)
@@ -75,7 +75,7 @@ extension ArcStore {
     }
 
     @discardableResult
-    public func removeLabel(ticketId: String, labelId: String) async throws -> [Label] {
+    public func removeLabel(ticketId: String, labelId: String) async throws -> [TicketLabel] {
         let timestamp = now()
         return try await write { db in
             _ = try Self.requireTicket(db, id: ticketId)
@@ -86,10 +86,10 @@ extension ArcStore {
     }
 
     @discardableResult
-    public func updateLabel(id: String, name: String? = nil, color: String? = nil, description: String? = nil) async throws -> Label {
+    public func updateLabel(id: String, name: String? = nil, color: String? = nil, description: String? = nil) async throws -> TicketLabel {
         try await write { db in
-            guard var label = try Label.fetchOne(db, sql: "SELECT * FROM label WHERE id = ?", arguments: [id]) else {
-                throw ArcError.notFound("Label not found.")
+            guard var label = try TicketLabel.fetchOne(db, sql: "SELECT * FROM label WHERE id = ?", arguments: [id]) else {
+                throw ArcError.notFound("TicketLabel not found.")
             }
             if let name {
                 let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)

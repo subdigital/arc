@@ -162,7 +162,7 @@ public struct Milestone: Codable, FetchableRecord, PersistableRecord, Sendable, 
     public var updatedAt: Date
 }
 
-public struct Label: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
+public struct TicketLabel: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
     public static let databaseTableName = "label"
     public static let databaseColumnDecodingStrategy = DatabaseColumnDecodingStrategy.convertFromSnakeCase
     public static let databaseColumnEncodingStrategy = DatabaseColumnEncodingStrategy.convertToSnakeCase

@@ -13,6 +13,8 @@ struct TicketDetailView: View {
     @State private var descriptionSaveTask: Task<Void, Never>?
     @State private var newSubtask = ""
     @State private var commentDraft = ""
+    @State private var replyingTo: String?
+    @State private var replyDraft = ""
     @FocusState private var titleFocused: Bool
     @FocusState private var descriptionFocused: Bool
     @FocusState private var commentFocused: Bool
@@ -78,8 +80,11 @@ struct TicketDetailView: View {
             VStack(alignment: .leading, spacing: 22) {
                 header(detail)
                 titleField(detail)
+                LabelsRow(ticketID: detail.ticket.id, labels: detail.labels)
                 descriptionSection(detail)
                 childrenSection(detail)
+                RelationsSection(ticket: detail.ticket, relations: detail.relations)
+                AttachmentsSection(ticketID: detail.ticket.id, attachments: detail.attachments)
                 commentsSection(detail)
             }
             .padding(.horizontal, 32)
@@ -256,8 +261,20 @@ struct TicketDetailView: View {
     private func commentsSection(_ detail: TicketDetail) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Comments").font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
-            ForEach(detail.comments) { comment in
-                CommentView(comment: comment)
+            ForEach(threads(detail.comments), id: \.root.id) { thread in
+                VStack(alignment: .leading, spacing: 8) {
+                    CommentView(comment: thread.root) { replyingTo = thread.root.id; replyDraft = "" }
+                    if !thread.replies.isEmpty || replyingTo == thread.root.id {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(thread.replies) { reply in
+                                CommentView(comment: reply) { replyingTo = thread.root.id; replyDraft = "" }
+                            }
+                            if replyingTo == thread.root.id { replyComposer(thread.root) }
+                        }
+                        .padding(.leading, 22)
+                        .overlay(alignment: .leading) { Rectangle().fill(Theme.border).frame(width: 2).padding(.leading, 6) }
+                    }
+                }
             }
             VStack(alignment: .trailing, spacing: 8) {
                 TextField("Leave a comment… (Markdown)", text: $commentDraft, axis: .vertical)
@@ -276,6 +293,52 @@ struct TicketDetailView: View {
                     .disabled(commentDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
+    }
+
+    /// Top-level comments with their replies (all depths, oldest first) listed under them.
+    private func threads(_ comments: [Comment]) -> [(root: Comment, replies: [Comment])] {
+        let ids = Set(comments.map(\.id))
+        let byID = Dictionary(uniqueKeysWithValues: comments.map { ($0.id, $0) })
+        func rootID(of comment: Comment) -> String {
+            var current = comment
+            var hops = 0
+            while let parent = current.parentId, let next = byID[parent], hops < 50 { current = next; hops += 1 }
+            return current.id
+        }
+        var replies: [String: [Comment]] = [:]
+        for comment in comments where comment.parentId.map(ids.contains) == true {
+            replies[rootID(of: comment), default: []].append(comment)
+        }
+        return comments.filter { $0.parentId.map(ids.contains) != true }.map { ($0, replies[$0.id] ?? []) }
+    }
+
+    private func replyComposer(_ root: Comment) -> some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            TextField("Reply…", text: $replyDraft, axis: .vertical)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+                .lineLimit(2...8)
+                .padding(10)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .background(Theme.bgElevated, in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.accent, lineWidth: 1))
+                .accessibilityLabel("Reply (Markdown)")
+            HStack {
+                Button("Cancel") { replyingTo = nil }.buttonStyle(SubtleButtonStyle())
+                Button("Reply") { postReply(to: root) }
+                    .keyboardShortcut(.return, modifiers: .command)
+                    .buttonStyle(AccentButtonStyle())
+                    .disabled(replyDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+    }
+
+    private func postReply(to root: Comment) {
+        let body = replyDraft
+        guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        replyDraft = ""
+        replyingTo = nil
+        Task { await app.perform { try await app.store.addComment(ticketId: ticketID, body: body, author: .user, parentId: root.id) } }
     }
 
     private func postComment() {
@@ -333,11 +396,12 @@ private struct SubtaskRow: View {
 private struct CommentView: View {
     @Environment(AppModel.self) private var app
     let comment: Comment
+    var onReply: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(comment.author == .agent ? "Agent" : "You")
+                Text(comment.authorName ?? (comment.author == .agent ? "Agent" : "You"))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(comment.author == .agent ? Theme.accent : Theme.textSecondary)
                     .padding(.horizontal, 7)
@@ -346,12 +410,16 @@ private struct CommentView: View {
                         (comment.author == .agent ? Theme.accent.opacity(0.16) : Theme.bgSelected),
                         in: Capsule()
                     )
-                    .accessibilityLabel(comment.author == .agent ? "Written by an agent" : "Written by you")
+                    .accessibilityLabel(comment.authorName.map { "Written by \($0)" } ?? (comment.author == .agent ? "Written by an agent" : "Written by you"))
                 Text(comment.createdAt.formatted(.relative(presentation: .named)))
                     .font(Theme.metaFont)
                     .foregroundStyle(Theme.textTertiary)
                     .help(comment.createdAt.formatted(date: .abbreviated, time: .shortened))
                 Spacer()
+                Button("Reply", action: onReply)
+                    .buttonStyle(.plain)
+                    .font(Theme.metaFont)
+                    .foregroundStyle(Theme.textTertiary)
             }
             MarkdownView(
                 comment.body,
@@ -375,6 +443,7 @@ private struct PropertiesPanel: View {
     @Environment(AppModel.self) private var app
     let detail: TicketDetail
     @State private var showingParentPicker = false
+    @State private var milestones: [Milestone] = []
 
     private var ticket: Ticket { detail.ticket }
 
@@ -441,17 +510,45 @@ private struct PropertiesPanel: View {
                     }
                 }
 
+                if !milestones.isEmpty {
+                    property("Milestone") {
+                        Menu {
+                            Button("No milestone") { Task { await setMilestone(nil) } }
+                            ForEach(milestones) { milestone in
+                                Button {
+                                    Task { await setMilestone(milestone.id) }
+                                } label: {
+                                    Label(milestone.name, systemImage: milestone.id == ticket.milestoneId ? "checkmark" : "")
+                                }
+                            }
+                        } label: {
+                            Text(detail.milestone?.name ?? "No milestone")
+                                .foregroundStyle(detail.milestone == nil ? Theme.textTertiary : Theme.textPrimary)
+                        }
+                    }
+                }
+
                 Rectangle().fill(Theme.border).frame(height: 1)
 
                 VStack(alignment: .leading, spacing: 6) {
                     dateRow("Created", ticket.createdAt)
-                    dateRow("Updated", ticket.updatedAt)
+                    if let started = ticket.startedAt { dateRow("Started", started) }
                     if let completed = ticket.completedAt { dateRow("Completed", completed) }
+                    if let canceled = ticket.canceledAt { dateRow("Canceled", canceled) }
+                    if let archived = ticket.archivedAt { dateRow("Archived", archived) }
+                    dateRow("Updated", ticket.updatedAt)
                 }
             }
             .padding(16)
         }
         .background(Theme.bgSidebar)
+        .task(id: "\(ticket.projectId)-\(app.feed.generation)") {
+            milestones = (try? await app.store.milestones(projectId: ticket.projectId)) ?? []
+        }
+    }
+
+    private func setMilestone(_ id: String?) async {
+        await app.perform { try await app.store.updateTicket(id: ticket.id, TicketPatch(milestoneId: .set(id))) }
     }
 
     private func property<Content: View>(_ name: String, @ViewBuilder content: () -> Content) -> some View {

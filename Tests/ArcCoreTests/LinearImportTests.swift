@@ -86,10 +86,10 @@ import Testing
         #expect(childDetail.comments[1].parentId == childDetail.comments[0].id)
         #expect(childDetail.comments[1].authorName == "sam")
 
-        // Projects: completed ones are archived, the ticket without a project goes to the team's project.
+        // Projects stay active (even completed ones); the ticket without a project goes to the team's project.
         let projects = try await store.projects(includeArchived: true)
         #expect(Set(projects.map(\.name)) == ["Alpha", "Old", "Fickle bits"])
-        #expect(projects.first { $0.name == "Old" }?.isArchived == true)
+        #expect(projects.allSatisfy { !$0.isArchived })
         #expect(projects.first { $0.name == "Alpha" }?.icon == "Boombox")
         #expect(try await store.resolveTicket("FIC-4").projectId == projects.first { $0.name == "Fickle bits" }?.id)
 

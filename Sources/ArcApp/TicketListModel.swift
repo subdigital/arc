@@ -45,6 +45,9 @@ final class TicketListModel {
     private(set) var tickets: [TicketSummary] = []
     /// Tickets with children that a user can filter by within this scope.
     private(set) var availableParents: [Ticket] = []
+    private(set) var availableLabels: [TicketLabel] = []
+    /// Milestones of the project being viewed (project scope only).
+    private(set) var availableMilestones: [Milestone] = []
     private(set) var hasLoaded = false
 
     init(scope: Scope, store: ArcStore, settingsStore: ViewSettingsStore) {
@@ -74,6 +77,8 @@ final class TicketListModel {
             query.parentId = settings.parentFilter
         }
         query.priorities = Set(settings.priorityFilter.compactMap(TicketPriority.init(rawValue:)))
+        query.labelIds = settings.labelFilter
+        if case .project = scope { query.milestoneId = settings.milestoneFilter }
         return query
     }
 
@@ -89,6 +94,8 @@ final class TicketListModel {
             case .children: break
             }
             availableParents = try await store.tickets(matching: parentQuery).filter { $0.childCount > 0 }.map(\.ticket)
+            availableLabels = try await store.labels()
+            if case .project(let id) = scope { availableMilestones = try await store.milestones(projectId: id) }
             hasLoaded = true
         } catch {
             // Keep showing the last good data; the next change tick retries.

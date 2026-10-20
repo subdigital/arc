@@ -23,6 +23,7 @@ public struct ToolOutcome: Sendable, Equatable {
 public enum ArcTools {
     public static let all: [ArcTool] = [
         listProjects, createProject, listTickets, getTicket, createTicket, updateTicket, addComment,
+        addRelation, removeRelation, addLink,
     ]
 
     public static func tool(named name: String) -> ArcTool? { all.first { $0.name == name } }
@@ -96,12 +97,17 @@ public enum ArcTools {
         return .object(object)
     }
 
-    private static func stringOrList(_ description: String, values: [String]) -> Value {
-        .object([
+    private static func stringOrList(_ description: String, values: [String]?) -> Value {
+        func item(_ extra: [String: Value] = [:]) -> Value {
+            var object: [String: Value] = ["type": "string"]
+            if let values { object["enum"] = .array(values.map { .string($0) }) }
+            return .object(object.merging(extra) { $1 })
+        }
+        return .object([
             "description": .string(description),
             "oneOf": .array([
-                .object(["type": "string", "enum": .array(values.map { .string($0) })]),
-                .object(["type": "array", "items": .object(["type": "string", "enum": .array(values.map { .string($0) })])]),
+                item(),
+                .object(["type": "array", "items": item()]),
             ]),
         ])
     }
@@ -150,6 +156,8 @@ public enum ArcTools {
             "status": stringOrList("Only these statuses. Spaces and hyphens are accepted in place of underscores.", values: statusNames),
             "priority": stringOrList("Only these priorities.", values: priorityNames),
             "parent": string("Only direct children of this ticket, \(ticketHelp)."),
+            "label": stringOrList("Only tickets with any of these labels (names, case-insensitive).", values: nil),
+            "milestone": string("Only tickets in this milestone (name); needs project."),
             "query": string("Case-insensitive text matched against title, description and identifier."),
             "include_closed": .object(["type": "boolean", "description": "Include done and canceled tickets. Default false."]),
             "limit": .object(["type": "integer", "minimum": 0, "description": "Return at most this many tickets."]),
@@ -182,6 +190,8 @@ public enum ArcTools {
             "parent": string("Make the new ticket a child of this ticket, \(ticketHelp)."),
             "status": string("Defaults to todo.", enum: statusNames),
             "priority": string("Defaults to none.", enum: priorityNames),
+            "labels": stringOrList("Labels to put on the ticket; any that do not exist yet are created.", values: nil),
+            "milestone": string("Milestone name in the ticket's project."),
         ], required: ["title"]),
         handler: { operations, data in
             try json(try await operations.createTicket(try decode(CreateTicketRequest.self, from: data)))
@@ -204,6 +214,8 @@ public enum ArcTools {
             "priority": string("New priority.", enum: priorityNames),
             "project": string("Move to this project (name)."),
             "parent": string("Parent ticket \(ticketHelp), or \"none\" to clear."),
+            "labels": stringOrList("Replace the ticket's labels with these (an empty list removes them all); new names are created.", values: nil),
+            "milestone": string("Milestone name in the ticket's project, or \"none\" to clear."),
         ], required: ["ticket"]),
         handler: { operations, data in
             try json(try await operations.updateTicket(try decode(UpdateTicketRequest.self, from: data)))
@@ -220,6 +232,52 @@ public enum ArcTools {
         handler: { operations, data in
             let arguments = try decode(AddCommentArguments.self, from: data)
             return try json(try await operations.addComment(ticket: arguments.ticket, body: arguments.body))
+        }
+    )
+
+    private static let relationNames = ["blocks", "blocked_by", "related", "duplicate_of", "duplicated_by"]
+
+    static let addRelation = ArcTool(
+        name: "add_relation",
+        description: """
+            Relate two tickets and return the first one. `relation` says how `ticket` relates to `other`: it blocks it, \
+            is blocked by it, is related to it, is a duplicate of it, or is duplicated by it. Both sides show the relation \
+            (a blocker that is still open marks the blocked ticket as blocked). Adding the same relation twice is harmless. \
+            Blocking cycles are rejected.
+            """,
+        inputSchema: schema([
+            "ticket": string("The \(ticketHelp)."),
+            "relation": string("How ticket relates to other.", enum: relationNames),
+            "other": string("The other \(ticketHelp)."),
+        ], required: ["ticket", "relation", "other"]),
+        handler: { operations, data in
+            try json(try await operations.addRelation(try decode(RelationRequest.self, from: data)))
+        }
+    )
+
+    static let removeRelation = ArcTool(
+        name: "remove_relation",
+        description: "Remove a relation between two tickets (same arguments as add_relation) and return the first ticket.",
+        inputSchema: schema([
+            "ticket": string("The \(ticketHelp)."),
+            "relation": string("How ticket relates to other.", enum: relationNames),
+            "other": string("The other \(ticketHelp)."),
+        ], required: ["ticket", "relation", "other"]),
+        handler: { operations, data in
+            try json(try await operations.removeRelation(try decode(RelationRequest.self, from: data)))
+        }
+    )
+
+    static let addLink = ArcTool(
+        name: "add_link",
+        description: "Attach a link (a pull request, a design, a document…) to a ticket and return it. Attachments are listed by get_ticket.",
+        inputSchema: schema([
+            "ticket": string("The \(ticketHelp)."),
+            "url": string("The URL."),
+            "title": string("A short title; defaults to the URL's host."),
+        ], required: ["ticket", "url"]),
+        handler: { operations, data in
+            try json(try await operations.addLink(try decode(AddLinkRequest.self, from: data)))
         }
     )
 }

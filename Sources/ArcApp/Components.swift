@@ -239,3 +239,58 @@ struct SubtleButtonStyle: ButtonStyle {
             .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1))
     }
 }
+
+// MARK: - Labels and relations
+
+/// A label as a small chip: color dot plus name.
+struct LabelChip: View {
+    let label: TicketLabel
+    var onRemove: (() -> Void)?
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Circle().fill(Color(hexString: label.color)).frame(width: 7, height: 7)
+            Text(label.name).lineLimit(1)
+            if let onRemove {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark").font(.system(size: 8, weight: .semibold))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove label \(label.name)")
+            }
+        }
+        .font(Theme.metaFont)
+        .foregroundStyle(Theme.textSecondary)
+        .padding(.horizontal, 7)
+        .frame(height: 18)
+        .background(Theme.bgElevated, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.border, lineWidth: 1))
+        .fixedSize()
+    }
+}
+
+/// The first few label chips of a row, with a "+n" for the rest.
+struct LabelChips: View {
+    let labels: [TicketLabel]
+    var limit = 3
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(labels.prefix(limit)) { LabelChip(label: $0) }
+            if labels.count > limit {
+                Text("+\(labels.count - limit)").font(Theme.metaFont).foregroundStyle(Theme.textTertiary)
+            }
+        }
+    }
+}
+
+/// Shown on rows and cards while an open ticket blocks this one.
+struct BlockedBadge: View {
+    var body: some View {
+        Image(systemName: "hand.raised.fill")
+            .font(.system(size: 10))
+            .foregroundStyle(Color(hexString: "#EB5757"))
+            .help("Blocked by an open ticket")
+            .accessibilityLabel("Blocked")
+    }
+}

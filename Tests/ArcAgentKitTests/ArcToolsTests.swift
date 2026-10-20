@@ -15,11 +15,48 @@ import Testing
         return (outcome, parsed)
     }
 
-    @Test func exposesExactlyTheSevenSpecifiedToolsAndNoDelete() {
+    @Test func exposesExactlyTheSpecifiedToolsAndNoDelete() {
         #expect(ArcTools.all.map(\.name) == [
             "list_projects", "create_project", "list_tickets", "get_ticket", "create_ticket", "update_ticket", "add_comment",
+            "add_relation", "remove_relation", "add_link",
         ])
         #expect(!ArcTools.all.contains { $0.name.contains("delete") })
+    }
+
+    @Test func labelsMilestonesRelationsAndLinksFlowThroughTools() async throws {
+        let ops = try operations()
+        _ = try await call("create_project", ["name": "API"], ops)
+        _ = try await ops.createMilestone(project: "API", name: "Beta")
+        let (_, first) = try await call("create_ticket", ["title": "A", "project": "API", "labels": ["Bug", "mobile"], "milestone": "beta"], ops)
+        let created = try #require(first as? [String: Any])
+        #expect((created["labels"] as? [[String: Any]])?.compactMap { $0["name"] as? String } == ["Bug", "mobile"])
+        #expect(created["milestone"] as? String == "Beta")
+        _ = try await call("create_ticket", ["title": "B", "project": "API"], ops)
+
+        let (blockOutcome, blocked) = try await call("add_relation", ["ticket": "ARC-1", "relation": "blocks", "other": "ARC-2"], ops)
+        #expect(!blockOutcome.isError)
+        #expect((((blocked as? [String: Any])?["relations"] as? [String: Any])?["blocks"] as? [[String: Any]])?.first?["identifier"] as? String == "ARC-2")
+        let (_, other) = try await call("get_ticket", ["ticket": "ARC-2"], ops)
+        #expect((other as? [String: Any])?["blocked"] as? Bool == true)
+
+        let (cycle, _) = try await call("add_relation", ["ticket": "ARC-1", "relation": "blocked_by", "other": "ARC-2"], ops)
+        #expect(cycle.isError, "a blocking cycle must be rejected")
+        let (bad, _) = try await call("add_relation", ["ticket": "ARC-1", "relation": "friends_with", "other": "ARC-2"], ops)
+        #expect(bad.isError)
+        _ = try await call("remove_relation", ["ticket": "ARC-1", "relation": "blocks", "other": "ARC-2"], ops)
+        let (_, after) = try await call("get_ticket", ["ticket": "ARC-2"], ops)
+        #expect((after as? [String: Any])?["blocked"] as? Bool == false)
+
+        let (_, linked) = try await call("add_link", ["ticket": "ARC-1", "url": "https://github.com/x/y/pull/1", "title": "PR"], ops)
+        #expect(((linked as? [String: Any])?["attachments"] as? [[String: Any]])?.first?["title"] as? String == "PR")
+
+        let (_, replaced) = try await call("update_ticket", ["ticket": "ARC-1", "labels": ["only"], "milestone": "none"], ops)
+        #expect((replaced as? [String: Any])?["milestone"] is NSNull)
+        #expect(((replaced as? [String: Any])?["labels"] as? [[String: Any]])?.count == 1)
+        let (_, byLabel) = try await call("list_tickets", ["label": "ONLY"], ops)
+        #expect((byLabel as? [[String: Any]])?.count == 1)
+        let (unknown, _) = try await call("list_tickets", ["label": "nope"], ops)
+        #expect(unknown.isError)
     }
 
     @Test func everyToolDocumentsEveryParameter() throws {
@@ -37,7 +74,7 @@ import Testing
             }
         }
         let listTickets = try #require(ArcTools.tool(named: "list_tickets")?.inputSchema.objectValue?["properties"]?.objectValue)
-        #expect(Set(listTickets.keys) == ["project", "status", "priority", "parent", "query", "include_closed", "limit"])
+        #expect(Set(listTickets.keys) == ["project", "status", "priority", "parent", "label", "milestone", "query", "include_closed", "limit"])
     }
 
     @Test func createListGetUpdateAndCommentFlow() async throws {

@@ -66,7 +66,7 @@ public struct TicketSummary: Sendable, Hashable, Identifiable, FetchableRecord {
     public var milestoneName: String?
     /// True while at least one ticket that blocks this one is still open.
     public var isBlocked: Bool
-    public var labels: [Label] = []
+    public var labels: [TicketLabel] = []
 
     public var id: String { ticket.id }
 
@@ -114,7 +114,7 @@ public struct TicketDetail: Sendable, Hashable {
     public var parent: Ticket?
     public var children: [Ticket]
     public var comments: [Comment]
-    public var labels: [Label]
+    public var labels: [TicketLabel]
     public var relations: TicketRelations
     public var attachments: [Attachment]
     public var milestone: Milestone?
@@ -206,13 +206,13 @@ extension ArcStore {
     /// Fills in each summary's labels with one extra query.
     static func attachLabels(_ db: Database, to summaries: [TicketSummary]) throws -> [TicketSummary] {
         guard !summaries.isEmpty else { return summaries }
-        var byTicket: [String: [Label]] = [:]
+        var byTicket: [String: [TicketLabel]] = [:]
         let rows = try Row.fetchAll(db, sql: """
             SELECT ticket_label.ticket_id AS ticket_id, label.* FROM ticket_label
             JOIN label ON label.id = ticket_label.label_id ORDER BY label.name_key
             """)
         for row in rows {
-            byTicket[row["ticket_id"], default: []].append(try Label(row: row))
+            byTicket[row["ticket_id"], default: []].append(try TicketLabel(row: row))
         }
         guard !byTicket.isEmpty else { return summaries }
         return summaries.map { summary in

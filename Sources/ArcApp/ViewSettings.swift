@@ -28,6 +28,8 @@ struct ViewSettings: Codable, Equatable, Sendable {
     /// All Tasks only: restrict to these projects (empty = every active project).
     var projectFilter: Set<String> = []
     var parentFilter: String?
+    var labelFilter: Set<String> = []
+    var milestoneFilter: String?
     var priorityFilter: Set<Int> = []
     var showSubtasks = true
     /// Board only: whether the Canceled column is shown.
@@ -36,7 +38,7 @@ struct ViewSettings: Codable, Equatable, Sendable {
     var collapsedStatuses: Set<TicketStatus> = [.done, .canceled]
 
     var hasActiveFilters: Bool {
-        !projectFilter.isEmpty || parentFilter != nil || !priorityFilter.isEmpty || !showSubtasks
+        !projectFilter.isEmpty || parentFilter != nil || !labelFilter.isEmpty || milestoneFilter != nil || !priorityFilter.isEmpty || !showSubtasks
     }
 }
 

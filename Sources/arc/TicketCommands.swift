@@ -12,6 +12,8 @@ struct ListCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Only this status, e.g. todo or \"In Progress\". Repeatable.") var status: [String] = []
     @Option(name: .long, help: "Only this priority: none, urgent, high, medium, low. Repeatable.") var priority: [String] = []
     @Option(help: "Only direct children of this ticket (identifier).") var parent: String?
+    @Option(name: .long, help: "Only tickets with this label. Repeatable.") var label: [String] = []
+    @Option(help: "Only tickets in this milestone (needs --project).") var milestone: String?
     @Option(help: "Free-text search over title, description and identifier.") var query: String?
     @Flag(name: .long, help: "Include Done and Canceled tickets.") var all = false
     @Option(help: "Return at most this many tickets.") var limit: Int?
@@ -21,7 +23,7 @@ struct ListCommand: AsyncParsableCommand {
             project: project,
             status: status.isEmpty ? nil : StringList(status),
             priority: priority.isEmpty ? nil : StringList(priority),
-            parent: parent, query: query,
+            parent: parent, label: label.isEmpty ? nil : StringList(label), milestone: milestone, query: query,
             includeClosed: all, limit: limit
         )
         try await CLI.execute(global, render: HumanFormat.tickets) { try await $0.listTickets(request) }
@@ -54,12 +56,15 @@ struct CreateCommand: AsyncParsableCommand {
     @Option(help: "The parent ticket (identifier).") var parent: String?
     @Option(help: "backlog, todo, in_progress, in_review, done or canceled. Defaults to todo.") var status: String?
     @Option(help: "none, urgent, high, medium or low. Defaults to none.") var priority: String?
+    @Option(name: .long, help: "A label (created if new). Repeatable.") var label: [String] = []
+    @Option(help: "A milestone of the project (name).") var milestone: String?
 
     func run() async throws {
         do {
             let request = CreateTicketRequest(
                 title: title, project: project, description: try CLI.resolveStdin(description),
-                parent: parent, status: status, priority: priority
+                parent: parent, status: status, priority: priority,
+                labels: label.isEmpty ? nil : StringList(label), milestone: milestone
             )
             try await CLI.execute(global, render: HumanFormat.ticket) { try await $0.createTicket(request) }
         } catch let error as ArcError {
@@ -82,12 +87,16 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(help: "none, urgent, high, medium or low.") var priority: String?
     @Option(help: "Move to this project (name).") var project: String?
     @Option(help: "The parent ticket (identifier), or none.") var parent: String?
+    @Option(name: .long, help: "Replace the labels with these (repeatable; new ones are created).") var label: [String] = []
+    @Flag(name: .long, help: "Remove all labels.") var clearLabels = false
+    @Option(help: "A milestone of the project (name), or none.") var milestone: String?
 
     func run() async throws {
         do {
             let request = UpdateTicketRequest(
                 ticket: ticket, title: title, description: try CLI.resolveStdin(description),
-                status: status, priority: priority, project: project, parent: parent
+                status: status, priority: priority, project: project, parent: parent,
+                labels: clearLabels ? StringList([]) : (label.isEmpty ? nil : StringList(label)), milestone: milestone
             )
             try await CLI.execute(global, render: HumanFormat.ticket) { try await $0.updateTicket(request) }
         } catch let error as ArcError {

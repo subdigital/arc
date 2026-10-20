@@ -107,6 +107,8 @@ struct TicketsView: View {
             ) {
                 model.settings.projectFilter = []
                 model.settings.parentFilter = nil
+                model.settings.labelFilter = []
+                model.settings.milestoneFilter = nil
                 model.settings.priorityFilter = []
                 model.settings.showSubtasks = true
             }
@@ -133,6 +135,8 @@ struct FilterBar: View {
             if case .children = model.scope {} else {
                 parentMenu
             }
+            if !model.availableLabels.isEmpty { labelMenu }
+            if !model.availableMilestones.isEmpty { milestoneMenu }
             priorityMenu
             Toggle(isOn: $model.settings.showSubtasks) {
                 Text("Show sub-tickets").font(Theme.metaFont)
@@ -151,6 +155,8 @@ struct FilterBar: View {
                 Button("Clear filters") {
                     model.settings.projectFilter = []
                     model.settings.parentFilter = nil
+                    model.settings.labelFilter = []
+                    model.settings.milestoneFilter = nil
                     model.settings.priorityFilter = []
                     model.settings.showSubtasks = true
                 }
@@ -214,6 +220,53 @@ struct FilterBar: View {
     private var parentFilterTitle: String {
         guard let id = model.settings.parentFilter else { return "Parent" }
         return model.availableParents.first { $0.id == id }.map { "Parent · \($0.identifier)" } ?? "Parent"
+    }
+
+    private var labelMenu: some View {
+        Menu {
+            ForEach(model.availableLabels) { label in
+                Toggle(label.name, isOn: Binding(
+                    get: { model.settings.labelFilter.contains(label.id) },
+                    set: { isOn in
+                        if isOn { model.settings.labelFilter.insert(label.id) } else { model.settings.labelFilter.remove(label.id) }
+                    }
+                ))
+            }
+        } label: {
+            FlatChip(
+                title: model.settings.labelFilter.isEmpty ? "Label" : "Label · \(model.settings.labelFilter.count)",
+                systemImage: "tag",
+                isActive: !model.settings.labelFilter.isEmpty
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+    }
+
+    private var milestoneMenu: some View {
+        Menu {
+            Button("Any milestone") { model.settings.milestoneFilter = nil }
+            Divider()
+            ForEach(model.availableMilestones) { milestone in
+                Button {
+                    model.settings.milestoneFilter = milestone.id
+                } label: {
+                    Label(milestone.name, systemImage: model.settings.milestoneFilter == milestone.id ? "checkmark" : "")
+                }
+            }
+        } label: {
+            FlatChip(
+                title: model.availableMilestones.first { $0.id == model.settings.milestoneFilter }.map { "Milestone · \($0.name)" } ?? "Milestone",
+                systemImage: "flag",
+                isActive: model.settings.milestoneFilter != nil
+            )
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
     }
 
     private var priorityMenu: some View {

@@ -24,10 +24,11 @@ struct ProjectCommand: AsyncParsableCommand {
         @Argument(help: "The project name (unique, ignoring case).") var name: String
         @Option(help: "A short description.") var description: String?
         @Option(help: "A hex color such as #5E6AD2.") var color: String?
+        @Option(help: "An emoji or SF Symbol name.") var icon: String?
 
         func run() async throws {
-            try await CLI.execute(global, render: HumanFormat.project) { [name, description, color] in
-                try await $0.createProject(name: name, description: description, color: color)
+            try await CLI.execute(global, render: HumanFormat.project) { [name, description, color, icon] in
+                try await $0.createProject(name: name, description: description, color: color, icon: icon)
             }
         }
     }
@@ -39,10 +40,11 @@ struct ProjectCommand: AsyncParsableCommand {
         @Option(help: "The new name.") var name: String?
         @Option(help: "The new description.") var description: String?
         @Option(help: "A hex color such as #5E6AD2.") var color: String?
+        @Option(help: "An emoji or SF Symbol name (empty removes it).") var icon: String?
 
         func run() async throws {
-            try await CLI.execute(global, render: HumanFormat.project) { [project, name, description, color] in
-                try await $0.updateProject(project, name: name, description: description, color: color)
+            try await CLI.execute(global, render: HumanFormat.project) { [project, name, description, color, icon] in
+                try await $0.updateProject(project, name: name, description: description, color: color, icon: icon)
             }
         }
     }

@@ -97,6 +97,8 @@ struct TicketRowView: View {
                 .font(Theme.rowFont)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
+            if summary.isBlocked { BlockedBadge() }
+            if !summary.labels.isEmpty { LabelChips(labels: summary.labels) }
             Spacer(minLength: 12)
             Group {
                 if let parent = summary.parent, !item.isNested {

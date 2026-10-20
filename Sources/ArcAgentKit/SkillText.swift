@@ -16,6 +16,8 @@ extension ArcSkill {
         - A **project** contains **tickets**.
         - Any ticket may have a **parent** ticket, to any depth and even in another project. A ticket with children plays the role of an epic or a task with subtasks; there are no separate kinds.
         - Every ticket has a permanent identifier such as `ARC-12`. New tickets get `ARC-n` from one counter shared by all projects; the numbers are never reused. Tickets imported from another tracker keep their own key (for example `FIC-123`). Identifiers are case-insensitive, and a bare number (`12`) means `ARC-12`.
+        - Tickets can have **labels** (any name; a label is created the first time it is used), a **milestone** of their project, **links and files** (stored next to the database), and **relations** to other tickets: `blocks` / `blocked_by`, `related`, `duplicate_of` / `duplicated_by`. A ticket with an open blocker is shown as blocked.
+        - Comments can be replies, and imported comments keep their author's name.
         - Deleting a ticket keeps its children (they become top-level), and moving a ticket to another project does not move its children.
         - Statuses, in workflow order: `backlog`, `todo`, `in_progress`, `in_review`, `done`, `canceled`. `done` and `canceled` are closed; the rest are open.
         - Priorities: `urgent`, `high`, `medium`, `low`, `none`.
@@ -42,11 +44,13 @@ extension ArcSkill {
         | --- | --- |
         | `list_projects` | List projects (names are what other tools take). |
         | `create_project` | Create a project. |
-        | `list_tickets` | List tickets; filters: `project`, `status`, `priority`, `parent`, `query`, `include_closed`, `limit`. |
+        | `list_tickets` | List tickets; filters: `project`, `status`, `priority`, `parent`, `label`, `milestone`, `query`, `include_closed`, `limit`. |
         | `get_ticket` | One ticket with description, parent, children and comments. |
-        | `create_ticket` | Create a ticket; `title` plus `project` (or `parent`, which supplies the project). |
-        | `update_ticket` | Change status, priority, title, description, project, parent (`none` clears it). |
+        | `create_ticket` | Create a ticket; `title` plus `project` (or `parent`, which supplies the project); optional `labels`, `milestone`. |
+        | `update_ticket` | Change status, priority, title, description, project, parent (`none` clears it), `labels` (replaces them), `milestone`. |
         | `add_comment` | Add a comment (recorded as written by an agent). |
+        | `add_relation` / `remove_relation` | `ticket`, `relation` (`blocks`, `blocked_by`, `related`, `duplicate_of`, `duplicated_by`), `other`. |
+        | `add_link` | Attach a URL (a pull request, a design…) to a ticket. |
 
         Examples:
 
@@ -74,6 +78,10 @@ extension ArcSkill {
         arc create --project Website --title "Fix footer" --priority high --json
         arc create --parent ARC-12 --title "Add tests" --json   # child ticket: project comes from the parent
         arc update ARC-12 --status in_review --json
+        arc create --project Website --title "Fix footer" --label bug --label mobile --json   # labels are created on demand
+        arc relate ARC-12 blocked_by FIC-9                  # also: blocks, related, duplicate_of; arc unrelate to remove
+        arc attach ARC-12 --url https://github.com/org/repo/pull/7 --title "PR"
+        arc milestone list Website
         ```
 
         Long text can come from stdin with `-`:

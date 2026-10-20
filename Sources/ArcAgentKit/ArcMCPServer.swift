@@ -12,7 +12,9 @@ public enum ArcMCPServer {
 
         Hierarchy: a project contains tickets, and any ticket may have a parent ticket (to any depth, even in \
         another project), so a ticket with children plays the role of an epic or a task with subtasks. \
-        Every ticket has a permanent identifier like ARC-12; tickets imported from elsewhere keep their own key (FIC-123).
+        Every ticket has a permanent identifier like ARC-12; tickets imported from elsewhere keep their own key (FIC-123). \
+        Tickets can have labels (created on first use), a milestone of their project, links and files, and relations to other \
+        tickets (blocks / blocked by / related / duplicate), which add_relation and remove_relation manage.
 
         Statuses: backlog, todo, in_progress, in_review, done, canceled. Priorities: none, urgent, high, medium, low.
 

@@ -138,7 +138,7 @@ public struct LabelDTO: Codable, Sendable, Equatable {
     public var name: String
     public var color: String
 
-    public init(_ label: Label) {
+    public init(_ label: TicketLabel) {
         name = label.name
         color = label.color
     }
