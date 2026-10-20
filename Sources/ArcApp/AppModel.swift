@@ -298,6 +298,11 @@ final class AppModel {
         return selectedTicketID.map { [$0] } ?? []
     }
 
+    /// The tickets a right-click on `id` should affect: all ticked rows when `id` is one of them.
+    func contextTargets(for id: String) -> [String] {
+        checkedTicketIDs.contains(id) ? Array(checkedTicketIDs) : [id]
+    }
+
     /// Applies `patch` to each ticket; reports how many could not be changed.
     func bulkUpdate(_ ids: [String], _ patch: TicketPatch, done: String) async {
         var failures: [String] = []

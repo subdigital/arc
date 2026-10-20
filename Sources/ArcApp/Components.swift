@@ -75,37 +75,44 @@ struct TicketContextMenu: ViewModifier {
     func body(content: Content) -> some View {
         content.contextMenu {
             let ticket = summary.ticket
+            // Right-clicking a ticked row acts on every ticked row; any other row acts alone.
+            let targets = app.contextTargets(for: ticket.id)
+            let many = targets.count > 1
             Menu("Status") {
-                StatusMenuItems(current: ticket.status) { status in
-                    Task { await app.setStatus(status, for: ticket.id) }
+                StatusMenuItems(current: many ? nil : ticket.status) { status in
+                    Task { await app.bulkUpdate(targets, TicketPatch(status: status), done: "Updated") }
                 }
             }
             Menu("Priority") {
-                PriorityMenuItems(current: ticket.priority) { priority in
-                    Task { await app.setPriority(priority, for: ticket.id) }
+                PriorityMenuItems(current: many ? nil : ticket.priority) { priority in
+                    Task { await app.bulkUpdate(targets, TicketPatch(priority: priority), done: "Updated") }
                 }
             }
             if ticket.kind == .task {
                 Menu("Epic") {
-                    Button("No Epic") { Task { await app.setEpic(nil, for: ticket.id) } }
+                    Button("No Epic") { Task { await app.bulkUpdate(targets, TicketPatch(epicId: .set(nil)), done: "Updated") } }
                     ForEach(app.epicsByProject[ticket.projectId] ?? []) { epic in
-                        Button("\(epic.identifier) \(epic.title)") { Task { await app.setEpic(epic.id, for: ticket.id) } }
+                        Button("\(epic.identifier) \(epic.title)") {
+                            Task { await app.bulkUpdate(targets, TicketPatch(epicId: .set(epic.id)), done: "Updated") }
+                        }
                     }
                 }
             }
             if ticket.kind != .subtask {
                 Menu("Move to Project") {
                     ForEach(app.projects) { project in
-                        Button(project.name) { Task { await app.move(ticket.id, toProject: project.id) } }
-                            .disabled(project.id == ticket.projectId)
+                        Button(project.name) { Task { await app.bulkUpdate(targets, TicketPatch(projectId: project.id), done: "Moved") } }
+                            .disabled(!many && project.id == ticket.projectId)
                     }
                 }
             }
             Divider()
-            Button("Copy ID") { app.copyToPasteboard(ticket.identifier) }
-            Button("Copy Title with ID") { app.copyToPasteboard("\(ticket.identifier) \(ticket.title)") }
-            Divider()
-            Button("Delete…", role: .destructive) { app.pendingDeletion = ticket.id }
+            if !many {
+                Button("Copy ID") { app.copyToPasteboard(ticket.identifier) }
+                Button("Copy Title with ID") { app.copyToPasteboard("\(ticket.identifier) \(ticket.title)") }
+                Divider()
+            }
+            Button(many ? "Delete \(targets.count) Tickets…" : "Delete…", role: .destructive) { app.pendingDeletionIDs = targets }
         }
     }
 }

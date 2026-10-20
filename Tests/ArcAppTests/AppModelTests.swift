@@ -103,6 +103,15 @@ import Testing
         #expect(app.error == nil)
     }
 
+    @Test func contextMenuTargetsAllTickedRowsOnlyWhenRightClickingOne() throws {
+        let app = try model()
+        app.checkedTicketIDs = ["a", "b"]
+        #expect(Set(app.contextTargets(for: "a")) == ["a", "b"])
+        #expect(app.contextTargets(for: "c") == ["c"])
+        app.checkedTicketIDs = []
+        #expect(app.contextTargets(for: "a") == ["a"])
+    }
+
     @Test func bulkMoveReportsSubtasksThatCannotMove() async throws {
         let app = try model()
         let a = try await app.store.createProject(name: "A")
