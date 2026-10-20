@@ -60,7 +60,7 @@ public final class ArcStore: Sendable {
                 nameKey: key,
                 description: description,
                 color: color ?? Self.projectColors[count % Self.projectColors.count],
-                icon: icon,
+                icon: icon.map(ProjectIcons.normalized),
                 externalId: nil,
                 archivedAt: nil,
                 createdAt: timestamp,
@@ -86,7 +86,7 @@ public final class ArcStore: Sendable {
             }
             if let description { project.description = description }
             if let color { project.color = color }
-            if let icon { project.icon = icon.isEmpty ? nil : icon }
+            if let icon { project.icon = icon.isEmpty ? nil : ProjectIcons.normalized(icon) }
             project.updatedAt = timestamp
             try project.update(db)
             return project

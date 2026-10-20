@@ -90,7 +90,7 @@ import Testing
         let projects = try await store.projects(includeArchived: true)
         #expect(Set(projects.map(\.name)) == ["Alpha", "Old", "Fickle bits"])
         #expect(projects.allSatisfy { !$0.isArchived })
-        #expect(projects.first { $0.name == "Alpha" }?.icon == "Boombox")
+        #expect(projects.first { $0.name == "Alpha" }?.icon == "hifispeaker")
         #expect(try await store.resolveTicket("FIC-4").projectId == projects.first { $0.name == "Fickle bits" }?.id)
 
         // New ARC tickets still count from 1 and do not collide.

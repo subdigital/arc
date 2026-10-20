@@ -165,6 +165,17 @@ import Testing
 
     // MARK: Timestamps and icons
 
+    @Test func linearIconNamesBecomeSymbols() async throws {
+        #expect(ProjectIcons.normalized("SouthAmerica") == "globe.americas")
+        #expect(ProjectIcons.normalized(" Boombox ") == "hifispeaker")
+        #expect(ProjectIcons.normalized("🎸") == "🎸")
+        #expect(ProjectIcons.normalized("star") == "star")
+        let store = try makeStore()
+        let project = try await store.createProject(name: "A", icon: "Sound")
+        #expect(project.icon == "waveform")
+        #expect(try await store.updateProject(id: project.id, icon: "Rocket").icon == "paperplane")
+    }
+
     @Test func projectIconsCanBeSetAndCleared() async throws {
         let store = try makeStore()
         let project = try await store.createProject(name: "A", icon: "🎸")

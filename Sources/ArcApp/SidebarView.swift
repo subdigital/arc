@@ -1,4 +1,5 @@
 import ArcCore
+import AppKit
 import SwiftUI
 
 struct SidebarView: View {
@@ -100,31 +101,108 @@ private struct ProjectRow: View {
     }
 }
 
-/// A project's icon: its emoji or SF Symbol (Linear icon names are mapped), tinted with the project color,
-/// or the plain color dot when there is none.
+/// A project's icon: its emoji or SF Symbol, tinted with the project color, or the plain color dot when there is none
+/// (or the name is not a symbol this system knows).
 struct ProjectIcon: View {
     let project: Project
     var size: CGFloat = 13
 
-    private static let symbols = [
-        "Subscribe": "bell", "SouthAmerica": "globe.americas", "Sound": "waveform", "Boombox": "hifispeaker",
-        "Bitcoin": "bitcoinsign.circle", "Rocket": "paperplane", "Bug": "ladybug", "Code": "chevron.left.forwardslash.chevron.right",
-        "Database": "cylinder", "Phone": "iphone", "Mobile": "iphone", "Server": "server.rack", "Star": "star", "Heart": "heart",
-    ]
+    var body: some View {
+        IconView(icon: project.icon, tint: Color(hexString: project.color), size: size)
+    }
+}
+
+struct IconView: View {
+    let icon: String?
+    let tint: Color
+    var size: CGFloat = 13
 
     var body: some View {
-        let tint = Color(hexString: project.color)
-        if let icon = project.icon, !icon.isEmpty {
-            if let symbol = Self.symbols[icon] ?? (icon.contains(".") ? icon : nil) {
-                Image(systemName: symbol).font(.system(size: size - 2)).foregroundStyle(tint)
-            } else if icon.unicodeScalars.contains(where: { !$0.isASCII }) {
-                Text(icon).font(.system(size: size - 2))
-            } else {
-                Circle().fill(tint).frame(width: 9, height: 9)
-            }
+        let name = ProjectIcons.normalized(icon ?? "")
+        if name.isEmpty {
+            Circle().fill(tint).frame(width: 9, height: 9)
+        } else if NSImage(systemSymbolName: name, accessibilityDescription: nil) != nil {
+            Image(systemName: name).font(.system(size: size - 2)).foregroundStyle(tint)
+        } else if name.unicodeScalars.contains(where: { !$0.isASCII }) {
+            Text(name).font(.system(size: size - 2))
         } else {
             Circle().fill(tint).frame(width: 9, height: 9)
         }
+    }
+}
+
+/// Pick an SF Symbol from a grid, or type an emoji.
+struct IconPicker: View {
+    @Binding var icon: String
+    let tint: Color
+    @State private var showing = false
+    @State private var emoji = ""
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Button { showing = true } label: {
+                HStack(spacing: 8) {
+                    IconView(icon: icon, tint: tint, size: 16).frame(width: 18)
+                    Text(icon.isEmpty ? "Choose icon" : "Change icon").font(Theme.rowFont)
+                    Image(systemName: "chevron.down").font(.system(size: 9))
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .background(Theme.bgSelected.opacity(0.6), in: RoundedRectangle(cornerRadius: 6))
+                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showing, arrowEdge: .bottom) { picker }
+            if !icon.isEmpty {
+                Button("Remove") { icon = "" }.buttonStyle(SubtleButtonStyle())
+            }
+        }
+    }
+
+    private var picker: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollView {
+                LazyVGrid(columns: Array(repeating: GridItem(.fixed(34), spacing: 4), count: 8), spacing: 4) {
+                    ForEach(ProjectIcons.symbols, id: \.self) { symbol in
+                        Button {
+                            icon = symbol
+                            showing = false
+                        } label: {
+                            Image(systemName: symbol)
+                                .font(.system(size: 15))
+                                .foregroundStyle(icon == symbol ? Theme.accent : tint)
+                                .frame(width: 34, height: 30)
+                                .background(icon == symbol ? Theme.accent.opacity(0.18) : Color.clear, in: RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
+                        .help(symbol)
+                        .accessibilityLabel(symbol)
+                    }
+                }
+            }
+            .frame(height: 190)
+            Divider().overlay(Theme.border)
+            HStack {
+                TextField("Or type an emoji", text: $emoji)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit(useEmoji)
+                Button("Use", action: useEmoji)
+                    .buttonStyle(AccentButtonStyle())
+                    .disabled(emoji.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(12)
+        .frame(width: 320)
+        .background(Theme.bgElevated)
+    }
+
+    private func useEmoji() {
+        let value = emoji.trimmingCharacters(in: .whitespaces)
+        guard !value.isEmpty else { return }
+        icon = value
+        emoji = ""
+        showing = false
     }
 }
 
@@ -135,6 +213,10 @@ struct ProjectEditorSheet: View {
     @State private var name = ""
     @State private var icon = ""
     @FocusState private var focused: Bool
+
+    private var tintHex: String {
+        if case .rename(let project) = request.mode { project.color } else { "#5E6AD2" }
+    }
 
     private var title: String {
         if case .rename = request.mode { "Edit Project" } else { "New Project" }
@@ -147,9 +229,7 @@ struct ProjectEditorSheet: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .onSubmit(save)
-            TextField("Icon (an emoji or SF Symbol name, optional)", text: $icon)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit(save)
+            IconPicker(icon: $icon, tint: Color(hexString: tintHex))
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
@@ -165,7 +245,7 @@ struct ProjectEditorSheet: View {
         .frame(width: 340)
         .background(Theme.bgElevated)
         .onAppear {
-            if case .rename(let project) = request.mode { name = project.name; icon = project.icon ?? "" }
+            if case .rename(let project) = request.mode { name = project.name; icon = ProjectIcons.normalized(project.icon ?? "") }
             focused = true
         }
     }
