@@ -102,17 +102,7 @@ struct TicketDetailView: View {
 
     private func header(_ detail: TicketDetail) -> some View {
         HStack(spacing: 10) {
-            Button {
-                app.goBack()
-            } label: {
-                Label("Back", systemImage: "chevron.left").font(Theme.metaFont)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(Theme.textSecondary)
-            .help("Back (Esc)")
-
             if let parent = detail.parent {
-                Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(Theme.textTertiary)
                 Button {
                     app.open(ticket: parent.id)
                 } label: {

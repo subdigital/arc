@@ -136,7 +136,7 @@ final class AppModel {
     }
 
     /// Window-level shortcuts that must work whatever has keyboard focus (and never beep):
-    /// C, ?, and browser-style Back/Forward on ⌘← / ⌘→.
+    /// C, ?, Esc (leave a ticket page), Delete (delete targets), and browser-style Back/Forward on ⌘← / ⌘→.
     private func installKeyMonitor() {
         guard keyMonitor == nil else { return }
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -156,6 +156,19 @@ final class AppModel {
             case 123: navigateBack(); return true      // ⌘←
             case 124: navigateForward(); return true   // ⌘→
             default: return false
+            }
+        }
+        if flags.isEmpty {
+            switch event.keyCode {
+            case 53 where !path.isEmpty:  // Esc leaves the ticket page
+                goBack()
+                return true
+            case 51 where path.isEmpty && selection != .epics, 117 where path.isEmpty && selection != .epics:  // Delete / Backspace
+                let targets = actionTargets
+                guard !targets.isEmpty else { return false }
+                pendingDeletionIDs = targets
+                return true
+            default: break
             }
         }
         guard flags.subtracting(.shift).isEmpty, let characters = event.characters else { return false }
