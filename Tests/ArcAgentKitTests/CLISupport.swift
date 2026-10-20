@@ -33,12 +33,14 @@ func temporaryDatabasePath() -> String {
 
 /// Runs the built `arc` binary against an isolated database.
 @discardableResult
-func runArc(_ arguments: [String], db: String, stdin: String? = nil, home: String? = nil) throws -> CLIResult {
+/// Change notifications are suppressed unless `notify` is true, so parallel tests do not wake each other's listeners.
+func runArc(_ arguments: [String], db: String, stdin: String? = nil, home: String? = nil, notify: Bool = false) throws -> CLIResult {
     let process = Process()
     process.executableURL = arcExecutableURL
     process.arguments = arguments
     var environment = ProcessInfo.processInfo.environment
     environment["ARC_DB_PATH"] = db
+    if !notify { environment["ARC_NO_NOTIFY"] = "1" }
     if let home { environment["HOME"] = home }
     process.environment = environment
 

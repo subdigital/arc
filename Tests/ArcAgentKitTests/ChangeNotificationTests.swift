@@ -18,7 +18,7 @@ import Testing
         ) { _ in flag.bump() }
         defer { DistributedNotificationCenter.default().removeObserver(observer) }
 
-        try runArc(["project", "create", "Website"], db: db)
+        try runArc(["project", "create", "Website"], db: db, notify: true)
 
         var waited = 0.0
         while flag.value == 0 && waited < 5 {

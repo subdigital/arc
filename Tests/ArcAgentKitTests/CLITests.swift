@@ -262,4 +262,38 @@ import Testing
         #expect(error["code"] as? String == "schema_too_new")
         #expect((error["message"] as? String)?.contains("newer version of Arc") == true)
     }
+
+    @Test func labelsRelationsMilestonesAndLinksFromTheCommandLine() throws {
+        let db = temporaryDatabasePath()
+        try runArc(["project", "create", "Website", "--icon", "🎸"], db: db)
+        try runArc(["milestone", "create", "Website", "Beta", "--target", "2026-12-31"], db: db)
+        try runArc(["create", "--project", "Website", "--title", "A", "--label", "Bug", "--label", "mobile", "--milestone", "beta"], db: db)
+        try runArc(["create", "--project", "Website", "--title", "B"], db: db)
+
+        let shown = try runArc(["show", "ARC-1", "--json"], db: db).json()
+        #expect((shown["labels"] as? [[String: Any]])?.count == 2)
+        #expect(shown["milestone"] as? String == "Beta")
+        #expect(try runArc(["label", "list"], db: db).stdout.contains("Bug"))
+        #expect(try runArc(["milestone", "list", "Website"], db: db).stdout.contains("Beta"))
+        #expect(try runArc(["project", "list", "--json"], db: db).jsonArray().first?["icon"] as? String == "🎸")
+
+        let related = try runArc(["relate", "ARC-1", "blocks", "ARC-2", "--json"], db: db)
+        #expect(related.status == 0)
+        let listed = try runArc(["list", "--label", "bug", "--json"], db: db).jsonArray()
+        #expect(listed.map { $0["identifier"] as? String } == ["ARC-1"])
+        let blocked = try runArc(["show", "ARC-2"], db: db).stdout
+        #expect(blocked.contains("Blocked by: ARC-1"))
+        let cycle = try runArc(["relate", "ARC-1", "blocked_by", "ARC-2", "--json"], db: db)
+        #expect(cycle.status == 1)
+
+        let linked = try runArc(["attach", "ARC-1", "--url", "https://example.com/pr/1", "--title", "PR", "--json"], db: db).json()
+        #expect((linked["attachments"] as? [[String: Any]])?.first?["title"] as? String == "PR")
+        let neither = try runArc(["attach", "ARC-1", "--json"], db: db)
+        #expect(neither.status == 1)
+        try runArc(["unrelate", "ARC-1", "blocks", "ARC-2"], db: db)
+        #expect(!(try runArc(["show", "ARC-2"], db: db).stdout.contains("Blocked by")))
+        let cleared = try runArc(["update", "ARC-1", "--clear-labels", "--milestone", "none", "--json"], db: db).json()
+        #expect((cleared["labels"] as? [Any])?.isEmpty == true)
+        #expect(cleared["milestone"] is NSNull)
+    }
 }

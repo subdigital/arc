@@ -16,6 +16,7 @@ final class MCPSession: @unchecked Sendable {
         process.arguments = ["mcp"]
         var environment = ProcessInfo.processInfo.environment
         environment["ARC_DB_PATH"] = db
+        environment["ARC_NO_NOTIFY"] = "1"
         process.environment = environment
         process.standardInput = input
         process.standardOutput = output
