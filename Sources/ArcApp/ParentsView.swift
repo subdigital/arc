@@ -1,44 +1,44 @@
 import ArcCore
 import SwiftUI
 
-/// The Epics sidebar entry: epics grouped by project, with progress.
-struct EpicsOverview: View {
+/// The Parents sidebar entry: tickets that have children, grouped by project, with progress.
+struct ParentsOverview: View {
     @Environment(AppModel.self) private var app
-    @State private var epics: [EpicProgress] = []
+    @State private var parents: [ParentProgress] = []
     @State private var loaded = false
 
-    private var groups: [(project: String, epics: [EpicProgress])] {
+    private var groups: [(project: String, parents: [ParentProgress])] {
         var order: [String] = []
-        var byProject: [String: [EpicProgress]] = [:]
-        for epic in epics {
-            if byProject[epic.projectName] == nil { order.append(epic.projectName) }
-            byProject[epic.projectName, default: []].append(epic)
+        var byProject: [String: [ParentProgress]] = [:]
+        for parent in parents {
+            if byProject[parent.projectName] == nil { order.append(parent.projectName) }
+            byProject[parent.projectName, default: []].append(parent)
         }
         return order.map { ($0, byProject[$0] ?? []) }
     }
 
     var body: some View {
         Group {
-            if loaded && epics.isEmpty {
+            if loaded && parents.isEmpty {
                 EmptyStateView(
-                    title: "No epics yet",
-                    message: "Epics group related tasks inside a project.",
-                    buttonTitle: "New Epic"
+                    title: "No parent tickets yet",
+                    message: "Give a ticket a parent to group related work under it.",
+                    buttonTitle: "New Ticket"
                 ) {
-                    app.creation = CreationRequest(projectID: nil, kind: .epic)
+                    app.creation = CreationRequest(projectID: nil)
                 }
             } else {
                 ScrollView {
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         ForEach(groups, id: \.project) { group in
                             Section {
-                                ForEach(group.epics) { epic in
-                                    EpicRow(epic: epic)
+                                ForEach(group.parents) { parent in
+                                    ParentRow(parent: parent)
                                 }
                             } header: {
                                 HStack {
                                     Text(group.project).font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
-                                    Text("\(group.epics.count)").font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
+                                    Text("\(group.parents.count)").font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
                                     Spacer()
                                 }
                                 .padding(.horizontal, 14)
@@ -51,45 +51,45 @@ struct EpicsOverview: View {
             }
         }
         .background(Theme.bgContent)
-        .navigationTitle("Epics")
+        .navigationTitle("Parents")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    app.creation = CreationRequest(projectID: nil, kind: .epic)
+                    app.creation = CreationRequest(projectID: nil)
                 } label: {
-                    Label("New Epic", systemImage: "plus")
+                    Label("New Ticket", systemImage: "plus")
                 }
             }
         }
         .task(id: app.feed.generation) {
-            if let loadedEpics = try? await app.store.epicsWithProgress() {
-                epics = loadedEpics
+            if let loadedParents = try? await app.store.parentsWithProgress() {
+                parents = loadedParents
                 loaded = true
             }
         }
     }
 }
 
-private struct EpicRow: View {
+private struct ParentRow: View {
     @Environment(AppModel.self) private var app
-    let epic: EpicProgress
+    let parent: ParentProgress
     @State private var hovering = false
 
     var body: some View {
         HStack(spacing: 10) {
-            Text(epic.ticket.identifier)
+            Text(parent.ticket.identifier)
                 .font(Theme.metaFont.monospacedDigit())
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 52, alignment: .leading)
-            StatusGlyph(status: epic.ticket.status)
-            Text(epic.ticket.title)
+            StatusGlyph(status: parent.ticket.status)
+            Text(parent.ticket.title)
                 .font(Theme.rowFont)
                 .foregroundStyle(Theme.textPrimary)
                 .lineLimit(1)
             Spacer(minLength: 12)
-            ProgressBar(done: epic.done, total: epic.total)
+            ProgressBar(done: parent.done, total: parent.total)
                 .frame(width: 120)
-            Text("\(epic.done)/\(epic.total)")
+            Text("\(parent.done)/\(parent.total)")
                 .font(Theme.metaFont.monospacedDigit())
                 .foregroundStyle(Theme.textSecondary)
                 .frame(width: 40, alignment: .trailing)
@@ -99,15 +99,15 @@ private struct EpicRow: View {
         .background(hovering ? Theme.bgHover : .clear)
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
-        .onTapGesture { app.path.append(.epic(epic.ticket.id)) }
+        .onTapGesture { app.path.append(.children(parent.ticket.id)) }
         .contextMenu {
-            Button("Open Details") { app.open(ticket: epic.ticket.id) }
-            Button("Copy ID") { app.copyToPasteboard(epic.ticket.identifier) }
+            Button("Open Details") { app.open(ticket: parent.ticket.id) }
+            Button("Copy ID") { app.copyToPasteboard(parent.ticket.identifier) }
             Divider()
-            Button("Delete…", role: .destructive) { app.pendingDeletion = epic.ticket.id }
+            Button("Delete…", role: .destructive) { app.pendingDeletion = parent.ticket.id }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(epic.ticket.identifier), \(epic.ticket.title), \(epic.done) of \(epic.total) done")
+        .accessibilityLabel("\(parent.ticket.identifier), \(parent.ticket.title), \(parent.done) of \(parent.total) done")
         .accessibilityAddTraits(.isButton)
     }
 }

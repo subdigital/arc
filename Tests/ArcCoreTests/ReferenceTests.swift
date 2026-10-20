@@ -3,14 +3,17 @@ import Testing
 @testable import ArcCore
 
 @Suite struct ReferenceTests {
-    @Test(arguments: [("ARC-12", 12), ("arc-12", 12), ("Arc-7", 7), ("12", 12), (" 12 ", 12)])
-    func ticketNumbers(input: String, expected: Int) throws {
-        #expect(try Reference.ticketNumber(input) == expected)
+    @Test(arguments: [
+        ("ARC-12", "ARC", 12), ("arc-12", "ARC", 12), ("Arc-7", "ARC", 7), ("12", "ARC", 12), (" 12 ", "ARC", 12),
+        ("FIC-123", "FIC", 123), ("fic-123", "FIC", 123), ("Eng2-5", "ENG2", 5),
+    ])
+    func ticketKeys(input: String, prefix: String, number: Int) throws {
+        #expect(try Reference.ticketKey(input) == TicketKey(prefix: prefix, number: number))
     }
 
-    @Test(arguments: ["", "ARC-", "ARC-x", "abc", "0", "-3", "ARC-1.5", "ARC 12"])
+    @Test(arguments: ["", "ARC-", "ARC-x", "abc", "0", "-3", "ARC-1.5", "ARC 12", "-5", "1A-2", "A_B-2", "FIC-0"])
     func badTicketReferences(input: String) {
-        #expect(throws: ArcError.self) { try Reference.ticketNumber(input) }
+        #expect(throws: ArcError.self) { try Reference.ticketKey(input) }
     }
 
     @Test(arguments: [
@@ -37,11 +40,8 @@ import Testing
         #expect(try Reference.priority(input) == expected)
     }
 
-    @Test func badPriorityAndKind() {
+    @Test func badPriority() {
         #expect(throws: ArcError.self) { try Reference.priority("critical") }
-        #expect(throws: ArcError.self) { try Reference.kind("story") }
-        #expect((try? Reference.kind("Epic")) == .epic)
-        #expect((try? Reference.kind("SUBTASK")) == .subtask)
     }
 
     @Test func storeResolvesLenientTicketReferences() async throws {

@@ -29,9 +29,9 @@ import Testing
             let next = try String.fetchOne(db, sql: "SELECT value FROM meta WHERE key = 'next_ticket_number'")
             #expect(next == "1")
             let indexes = Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'index'"))
-            #expect(indexes.isSuperset(of: ["ticket_project_status_sort", "ticket_epic", "ticket_parent"]))
+            #expect(indexes.isSuperset(of: ["ticket_project_status_sort", "ticket_parent"]))
             let applied = try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations")
-            #expect(applied == ["v1"])
+            #expect(applied == ["v1", "v2"])
         }
     }
 

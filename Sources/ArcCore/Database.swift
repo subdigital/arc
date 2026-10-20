@@ -94,6 +94,41 @@ public enum ArcDatabase {
             try db.create(index: "comment_ticket", on: "comment", columns: ["ticket_id", "created_at"])
         }
 
+        // Tickets get a key prefix (imported tickets keep their source's key, new ones are ARC-n) and the
+        // hierarchy becomes a single `parent_id` of any depth: epics turn into plain parent tickets.
+        migrator.registerMigration("v2") { db in
+            try db.execute(sql: """
+                CREATE TABLE ticket_new (
+                    id TEXT NOT NULL PRIMARY KEY,
+                    prefix TEXT NOT NULL,
+                    number INTEGER NOT NULL,
+                    project_id TEXT NOT NULL REFERENCES project(id) ON DELETE CASCADE,
+                    parent_id TEXT REFERENCES ticket(id) ON DELETE SET NULL,
+                    title TEXT NOT NULL,
+                    description TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL,
+                    priority INTEGER NOT NULL,
+                    sort_key DOUBLE NOT NULL,
+                    created_at DOUBLE NOT NULL,
+                    updated_at DOUBLE NOT NULL,
+                    completed_at DOUBLE,
+                    UNIQUE (prefix, number)
+                )
+                """)
+            try db.execute(sql: """
+                INSERT INTO ticket_new
+                    (id, prefix, number, project_id, parent_id, title, description, status, priority,
+                     sort_key, created_at, updated_at, completed_at)
+                SELECT id, 'ARC', number, project_id, COALESCE(parent_id, epic_id), title, description, status, priority,
+                       sort_key, created_at, updated_at, completed_at
+                FROM ticket
+                """)
+            try db.execute(sql: "DROP TABLE ticket")
+            try db.execute(sql: "ALTER TABLE ticket_new RENAME TO ticket")
+            try db.create(index: "ticket_project_status_sort", on: "ticket", columns: ["project_id", "status", "sort_key"])
+            try db.create(index: "ticket_parent", on: "ticket", columns: ["parent_id"])
+        }
+
         return migrator
     }
 }

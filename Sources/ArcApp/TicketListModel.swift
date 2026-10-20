@@ -4,8 +4,10 @@ import Observation
 
 struct TicketRowItem: Identifiable, Equatable {
     var summary: TicketSummary
-    /// A subtask shown directly under its parent.
-    var isNested: Bool
+    /// How many ancestors are shown above this row (0 = top level).
+    var depth: Int
+
+    var isNested: Bool { depth > 0 }
 
     var id: String { summary.id }
 }
@@ -25,7 +27,7 @@ struct BoardColumn: Identifiable, Equatable {
     var id: TicketStatus { status }
 }
 
-/// Fetches and arranges the tickets for one scope (All Tasks, a project, or an epic).
+/// Fetches and arranges the tickets for one scope (All Tasks, a project, or the children of a ticket).
 @MainActor
 @Observable
 final class TicketListModel {
@@ -41,8 +43,8 @@ final class TicketListModel {
     }
 
     private(set) var tickets: [TicketSummary] = []
-    /// Epics a user can filter by within this scope.
-    private(set) var availableEpics: [Ticket] = []
+    /// Tickets with children that a user can filter by within this scope.
+    private(set) var availableParents: [Ticket] = []
     private(set) var hasLoaded = false
 
     init(scope: Scope, store: ArcStore, settingsStore: ViewSettingsStore) {
@@ -59,19 +61,17 @@ final class TicketListModel {
         var query = TicketQuery(includeClosed: true)
         switch scope {
         case .allTasks:
-            query.kinds = [.task, .subtask]
             query.projectIds = settings.projectFilter
         case .project(let id):
             query.projectIds = [id]
-        case .epic(let id):
-            query.epicId = id
+        case .children(let id):
+            query.parentId = id
         }
         if !settings.showSubtasks {
-            let kinds: Set<TicketKind> = query.kinds.isEmpty ? [.epic, .task, .subtask] : query.kinds
-            query.kinds = kinds.subtracting([.subtask])
+            if case .children = scope {} else { query.topLevelOnly = true }
         }
-        if case .epic = scope {} else {
-            query.epicId = settings.epicFilter
+        if case .children = scope {} else {
+            query.parentId = settings.parentFilter
         }
         query.priorities = Set(settings.priorityFilter.compactMap(TicketPriority.init(rawValue:)))
         return query
@@ -82,13 +82,13 @@ final class TicketListModel {
             let query = Self.query(for: scope, settings: settings)
             tickets = try await store.tickets(matching: query)
 
-            var epicQuery = TicketQuery(kinds: [.epic], includeClosed: true)
+            var parentQuery = TicketQuery(includeClosed: true)
             switch scope {
-            case .allTasks: epicQuery.projectIds = settings.projectFilter
-            case .project(let id): epicQuery.projectIds = [id]
-            case .epic: break
+            case .allTasks: parentQuery.projectIds = settings.projectFilter
+            case .project(let id): parentQuery.projectIds = [id]
+            case .children: break
             }
-            availableEpics = try await store.tickets(matching: epicQuery).map(\.ticket)
+            availableParents = try await store.tickets(matching: parentQuery).filter { $0.childCount > 0 }.map(\.ticket)
             hasLoaded = true
         } catch {
             // Keep showing the last good data; the next change tick retries.
@@ -106,7 +106,7 @@ final class TicketListModel {
         }
     }
 
-    /// Subtasks directly follow their parent when the parent is in the same group.
+    /// Children directly follow their parent when the parent is in the same group, at any depth.
     nonisolated static func nest(_ members: [TicketSummary]) -> [TicketRowItem] {
         let ids = Set(members.map(\.ticket.id))
         var childrenByParent: [String: [TicketSummary]] = [:]
@@ -116,12 +116,13 @@ final class TicketListModel {
             }
         }
         var rows: [TicketRowItem] = []
+        func append(_ member: TicketSummary, depth: Int) {
+            rows.append(TicketRowItem(summary: member, depth: depth))
+            for child in childrenByParent[member.ticket.id] ?? [] { append(child, depth: depth + 1) }
+        }
         for member in members {
             if let parent = member.ticket.parentId, ids.contains(parent) { continue }
-            rows.append(TicketRowItem(summary: member, isNested: false))
-            for child in childrenByParent[member.ticket.id] ?? [] {
-                rows.append(TicketRowItem(summary: child, isNested: true))
-            }
+            append(member, depth: 0)
         }
         return rows
     }

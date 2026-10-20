@@ -9,10 +9,10 @@ Arc is a local issue tracker that the user and their coding agents share. The us
 
 ## How work is organized
 
-- A **project** contains **epics** and **tasks**.
-- A **task** may belong to one **epic** (in the same project).
-- A task may have **subtasks** (one level deep). Epics and subtasks cannot have subtasks.
-- Every ticket (epic, task or subtask) has a permanent identifier such as `ARC-12`. The numbers come from one counter shared by all projects and kinds and are never reused. Identifiers are case-insensitive and a bare number (`12`) also works.
+- A **project** contains **tickets**.
+- Any ticket may have a **parent** ticket, to any depth and even in another project. A ticket with children plays the role of an epic or a task with subtasks; there are no separate kinds.
+- Every ticket has a permanent identifier such as `ARC-12`. New tickets get `ARC-n` from one counter shared by all projects; the numbers are never reused. Tickets imported from another tracker keep their own key (for example `FIC-123`). Identifiers are case-insensitive, and a bare number (`12`) means `ARC-12`.
+- Deleting a ticket keeps its children (they become top-level), and moving a ticket to another project does not move its children.
 - Statuses, in workflow order: `backlog`, `todo`, `in_progress`, `in_review`, `done`, `canceled`. `done` and `canceled` are closed; the rest are open.
 - Priorities: `urgent`, `high`, `medium`, `low`, `none`.
 
@@ -21,10 +21,10 @@ Descriptions and comments are GitHub Flavored Markdown: headings, lists, task li
 ## Workflow
 
 1. **Find the work.** If the user named a ticket, read it. Otherwise list open tickets in the relevant project.
-2. **Read the ticket** completely, including its description, subtasks and earlier comments, before changing anything.
+2. **Read the ticket** completely, including its description, children and earlier comments, before changing anything.
 3. **Claim it.** Set the status to `in_progress` before you start.
 4. **Leave progress notes** as comments when something worth recording happens: a decision, a finding, a blocker, a partial result. Keep them short and factual.
-5. **Record follow-up work** as new tickets instead of silently expanding the current one. Use a subtask for a step of the current task.
+5. **Record follow-up work** as new tickets instead of silently expanding the current one. Give a ticket a `parent` for a step of the current ticket.
 6. **Finish.** Add a closing comment summarizing what changed and how it was verified, then set the status to `in_review` (or `done` if the user told you to close it yourself).
 7. **Drop unwanted work** by setting it to `canceled`. Agents cannot delete tickets through MCP.
 
@@ -38,10 +38,10 @@ If the `arc` MCP server is registered (`claude mcp add arc -- arc mcp`), use its
 | --- | --- |
 | `list_projects` | List projects (names are what other tools take). |
 | `create_project` | Create a project. |
-| `list_tickets` | List tickets; filters: `project`, `kind`, `status`, `priority`, `epic`, `parent`, `query`, `include_closed`, `limit`. |
-| `get_ticket` | One ticket with description, subtasks and comments. |
-| `create_ticket` | Create a ticket; `title` plus `project` (or `parent` for a subtask). |
-| `update_ticket` | Change status, priority, title, description, project, epic, parent. |
+| `list_tickets` | List tickets; filters: `project`, `status`, `priority`, `parent`, `query`, `include_closed`, `limit`. |
+| `get_ticket` | One ticket with description, parent, children and comments. |
+| `create_ticket` | Create a ticket; `title` plus `project` (or `parent`, which supplies the project). |
+| `update_ticket` | Change status, priority, title, description, project, parent (`none` clears it). |
 | `add_comment` | Add a comment (recorded as written by an agent). |
 
 Examples:
@@ -68,7 +68,7 @@ arc show ARC-12 --json
 arc update ARC-12 --status in_progress --json
 arc comment ARC-12 "Parser done. Starting on the tests."
 arc create --project Website --title "Fix footer" --priority high --json
-arc create --parent ARC-12 --title "Add tests" --json   # subtask: project comes from the parent
+arc create --parent ARC-12 --title "Add tests" --json   # child ticket: project comes from the parent
 arc update ARC-12 --status in_review --json
 ```
 

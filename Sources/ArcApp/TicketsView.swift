@@ -5,7 +5,7 @@ import SwiftUI
 struct TicketsView: View {
     @Environment(AppModel.self) private var app
     @State private var model: TicketListModel
-    @State private var epicTitle: String?
+    @State private var parentTitle: String?
 
     init(scope: Scope, app: AppModel) {
         _model = State(initialValue: TicketListModel(scope: scope, store: app.store, settingsStore: app.settingsStore))
@@ -24,7 +24,7 @@ struct TicketsView: View {
         switch model.scope {
         case .allTasks: "All Tasks"
         case .project(let id): app.project(id: id)?.name ?? "Project"
-        case .epic: epicTitle ?? "Epic"
+        case .children: parentTitle ?? "Sub-tickets"
         }
     }
 
@@ -55,17 +55,17 @@ struct TicketsView: View {
             }
             ToolbarItem(placement: .primaryAction) {
                 Button {
-                    app.creation = CreationRequest(projectID: defaultProjectID, epicID: epicID)
+                    app.creation = CreationRequest(projectID: defaultProjectID, parentID: parentID)
                 } label: {
-                    Label("New Task", systemImage: "plus")
+                    Label("New Ticket", systemImage: "plus")
                 }
-                .help("New task (C)")
+                .help("New ticket (C)")
             }
         }
         .task(id: reloadKey) {
             await model.reload()
             app.checkedTicketIDs.formIntersection(model.tickets.map(\.id))
-            await loadEpicTitle()
+            await loadParentTitle()
         }
         .onChange(of: app.layoutToggleRequests) {
             model.settings.layout = model.settings.layout.toggled
@@ -76,17 +76,17 @@ struct TicketsView: View {
         switch model.scope {
         case .project(let id): id
         case .allTasks: model.settings.projectFilter.count == 1 ? model.settings.projectFilter.first : nil
-        case .epic: model.tickets.first?.ticket.projectId
+        case .children: nil
         }
     }
 
-    private var epicID: String? {
-        if case .epic(let id) = model.scope { id } else { nil }
+    private var parentID: String? {
+        if case .children(let id) = model.scope { id } else { nil }
     }
 
-    private func loadEpicTitle() async {
-        guard case .epic(let id) = model.scope else { return }
-        if let epic = try? await app.store.ticket(id: id) { epicTitle = "\(epic.identifier) \(epic.title)" }
+    private func loadParentTitle() async {
+        guard case .children(let id) = model.scope else { return }
+        if let parent = try? await app.store.ticket(id: id) { parentTitle = "\(parent.identifier) \(parent.title)" }
     }
 
     @ViewBuilder
@@ -94,10 +94,10 @@ struct TicketsView: View {
         if model.hasLoaded && model.tickets.isEmpty && !model.settings.hasActiveFilters {
             EmptyStateView(
                 title: "No tickets here yet",
-                message: "Create a task, or let an agent add one.",
-                buttonTitle: "New Task"
+                message: "Create a ticket, or let an agent add one.",
+                buttonTitle: "New Ticket"
             ) {
-                app.creation = CreationRequest(projectID: defaultProjectID, epicID: epicID)
+                app.creation = CreationRequest(projectID: defaultProjectID, parentID: parentID)
             }
         } else if model.hasLoaded && model.tickets.isEmpty {
             EmptyStateView(
@@ -106,7 +106,7 @@ struct TicketsView: View {
                 buttonTitle: "Clear Filters"
             ) {
                 model.settings.projectFilter = []
-                model.settings.epicFilter = nil
+                model.settings.parentFilter = nil
                 model.settings.priorityFilter = []
                 model.settings.showSubtasks = true
             }
@@ -130,12 +130,12 @@ struct FilterBar: View {
             if case .allTasks = model.scope {
                 projectMenu
             }
-            if case .epic = model.scope {} else {
-                epicMenu
+            if case .children = model.scope {} else {
+                parentMenu
             }
             priorityMenu
             Toggle(isOn: $model.settings.showSubtasks) {
-                Text("Show subtasks").font(Theme.metaFont)
+                Text("Show sub-tickets").font(Theme.metaFont)
             }
             .toggleStyle(.checkbox)
             .foregroundStyle(Theme.textSecondary)
@@ -150,7 +150,7 @@ struct FilterBar: View {
             if model.settings.hasActiveFilters {
                 Button("Clear filters") {
                     model.settings.projectFilter = []
-                    model.settings.epicFilter = nil
+                    model.settings.parentFilter = nil
                     model.settings.priorityFilter = []
                     model.settings.showSubtasks = true
                 }
@@ -187,22 +187,22 @@ struct FilterBar: View {
         .fixedSize()
     }
 
-    private var epicMenu: some View {
+    private var parentMenu: some View {
         Menu {
-            Button("Any epic") { model.settings.epicFilter = nil }
+            Button("Any parent") { model.settings.parentFilter = nil }
             Divider()
-            ForEach(model.availableEpics) { epic in
+            ForEach(model.availableParents) { parent in
                 Button {
-                    model.settings.epicFilter = epic.id
+                    model.settings.parentFilter = parent.id
                 } label: {
-                    Label("\(epic.identifier) \(epic.title)", systemImage: model.settings.epicFilter == epic.id ? "checkmark" : "")
+                    Label("\(parent.identifier) \(parent.title)", systemImage: model.settings.parentFilter == parent.id ? "checkmark" : "")
                 }
             }
         } label: {
             FlatChip(
-                title: epicFilterTitle,
+                title: parentFilterTitle,
                 systemImage: "square.stack.3d.up",
-                isActive: model.settings.epicFilter != nil
+                isActive: model.settings.parentFilter != nil
             )
         }
         .menuStyle(.button)
@@ -211,9 +211,9 @@ struct FilterBar: View {
         .fixedSize()
     }
 
-    private var epicFilterTitle: String {
-        guard let id = model.settings.epicFilter else { return "Epic" }
-        return model.availableEpics.first { $0.id == id }.map { "Epic · \($0.identifier)" } ?? "Epic"
+    private var parentFilterTitle: String {
+        guard let id = model.settings.parentFilter else { return "Parent" }
+        return model.availableParents.first { $0.id == id }.map { "Parent · \($0.identifier)" } ?? "Parent"
     }
 
     private var priorityMenu: some View {
@@ -250,13 +250,6 @@ struct BulkActionBar: View {
     private var ids: [String] { Array(app.checkedTicketIDs) }
     private var selected: [TicketSummary] { model.tickets.filter { app.checkedTicketIDs.contains($0.id) } }
 
-    /// Epics can only be assigned when every selected ticket is a task in one project.
-    private var epicChoices: [Ticket]? {
-        let projects = Set(selected.map(\.ticket.projectId))
-        guard projects.count == 1, selected.allSatisfy({ $0.ticket.kind == .task }), let project = projects.first else { return nil }
-        return app.epicsByProject[project] ?? []
-    }
-
     var body: some View {
         HStack(spacing: 10) {
             Text("\(ids.count) selected").font(Theme.rowFont).foregroundStyle(Theme.textPrimary)
@@ -279,18 +272,8 @@ struct BulkActionBar: View {
                     }
                 }
             }
-            Menu("Epic") {
-                Button("No epic") {
-                    Task { await app.bulkUpdate(ids, TicketPatch(epicId: .set(nil)), done: "Updated") }
-                }
-                ForEach(epicChoices ?? []) { epic in
-                    Button("\(epic.identifier) \(epic.title)") {
-                        Task { await app.bulkUpdate(ids, TicketPatch(epicId: .set(epic.id)), done: "Updated") }
-                    }
-                }
-            }
-            .disabled(epicChoices == nil)
-            .help(epicChoices == nil ? "Select tasks from a single project to assign an epic" : "Assign an epic")
+            Button("Parent") { app.parentPicking = ids }
+                .help("Set or clear the parent of the selected tickets")
 
             Button("Delete", role: .destructive) { app.pendingDeletionIDs = ids }
             Rectangle().fill(Theme.border).frame(width: 1, height: 18)

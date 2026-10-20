@@ -99,7 +99,7 @@ import Testing
         // Pre-warm the highlighter so the snapshot shows colors.
         _ = await HighlightSwiftHighlighter.shared.highlight("let x = 1", language: "swift")
         try render("markdown", width: 640) {
-            MarkdownView(source, knownTickets: [12], style: Theme.markdownStyle, onSourceChange: { _ in })
+            MarkdownView(source, knownTickets: ["ARC-12"], style: Theme.markdownStyle, onSourceChange: { _ in })
                 .padding(20)
         }
     }
@@ -108,14 +108,14 @@ import Testing
         guard let directory else { return }
         let store = try ArcStore(path: temporaryDatabasePath())
         let website = try await store.createProject(name: "Website")
-        let epic = try await store.createTicket(NewTicket(title: "Launch the new site", kind: .epic, projectId: website.id, status: .inProgress))
-        let footer = try await store.createTicket(NewTicket(title: "Build footer", projectId: website.id, epicId: epic.id, status: .inProgress, priority: .high))
-        try await store.createTicket(NewTicket(title: "Add tests", kind: .subtask, parentId: footer.id, status: .inProgress))
-        try await store.createTicket(NewTicket(title: "Check accessibility", kind: .subtask, parentId: footer.id, status: .done))
-        try await store.createTicket(NewTicket(title: "Hero image", projectId: website.id, epicId: epic.id, priority: .medium))
+        let epic = try await store.createTicket(NewTicket(title: "Launch the new site", projectId: website.id, status: .inProgress))
+        let footer = try await store.createTicket(NewTicket(title: "Build footer", projectId: website.id, parentId: epic.id, status: .inProgress, priority: .high))
+        try await store.createTicket(NewTicket(title: "Add tests", parentId: footer.id, status: .inProgress))
+        try await store.createTicket(NewTicket(title: "Check accessibility", parentId: footer.id, status: .done))
+        try await store.createTicket(NewTicket(title: "Hero image", projectId: website.id, parentId: epic.id, priority: .medium))
         try await store.createTicket(NewTicket(title: "Write launch copy", projectId: website.id, status: .inReview, priority: .urgent))
         try await store.createTicket(NewTicket(title: "Pick a typeface", projectId: website.id, status: .backlog))
-        try await store.createTicket(NewTicket(title: "Old banner", projectId: website.id, epicId: epic.id, status: .done))
+        try await store.createTicket(NewTicket(title: "Old banner", projectId: website.id, parentId: epic.id, status: .done))
 
         let settingsStore = ViewSettingsStore(defaults: UserDefaults(suiteName: "arc-snap-\(UUID().uuidString)")!)
         let appModel = AppModel(store: store, settingsStore: settingsStore)

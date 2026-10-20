@@ -25,29 +25,25 @@ public struct StringList: Codable, Sendable, Equatable, ExpressibleByArrayLitera
 
 public struct ListTicketsRequest: Codable, Sendable, Equatable {
     public var project: String?
-    public var kind: StringList?
     public var status: StringList?
     public var priority: StringList?
-    public var epic: String?
     public var parent: String?
     public var query: String?
     public var includeClosed: Bool?
     public var limit: Int?
 
     enum CodingKeys: String, CodingKey {
-        case project, kind, status, priority, epic, parent, query, limit
+        case project, status, priority, parent, query, limit
         case includeClosed = "include_closed"
     }
 
     public init(
-        project: String? = nil, kind: StringList? = nil, status: StringList? = nil, priority: StringList? = nil,
-        epic: String? = nil, parent: String? = nil, query: String? = nil, includeClosed: Bool? = nil, limit: Int? = nil
+        project: String? = nil, status: StringList? = nil, priority: StringList? = nil,
+        parent: String? = nil, query: String? = nil, includeClosed: Bool? = nil, limit: Int? = nil
     ) {
         self.project = project
-        self.kind = kind
         self.status = status
         self.priority = priority
-        self.epic = epic
         self.parent = parent
         self.query = query
         self.includeClosed = includeClosed
@@ -58,52 +54,44 @@ public struct ListTicketsRequest: Codable, Sendable, Equatable {
 public struct CreateTicketRequest: Codable, Sendable, Equatable {
     public var title: String
     public var project: String?
-    public var kind: String?
     public var description: String?
-    public var epic: String?
     public var parent: String?
     public var status: String?
     public var priority: String?
 
     public init(
-        title: String, project: String? = nil, kind: String? = nil, description: String? = nil,
-        epic: String? = nil, parent: String? = nil, status: String? = nil, priority: String? = nil
+        title: String, project: String? = nil, description: String? = nil,
+        parent: String? = nil, status: String? = nil, priority: String? = nil
     ) {
         self.title = title
         self.project = project
-        self.kind = kind
         self.description = description
-        self.epic = epic
         self.parent = parent
         self.status = status
         self.priority = priority
     }
 }
 
-/// `epic` and `parent` accept `"none"` (or an empty string) to clear the field.
+/// `parent` accepts `"none"` (or an empty string) to clear the field.
 public struct UpdateTicketRequest: Codable, Sendable, Equatable {
     public var ticket: String
     public var title: String?
     public var description: String?
-    public var kind: String?
     public var status: String?
     public var priority: String?
     public var project: String?
-    public var epic: String?
     public var parent: String?
 
     public init(
-        ticket: String, title: String? = nil, description: String? = nil, kind: String? = nil,
-        status: String? = nil, priority: String? = nil, project: String? = nil, epic: String? = nil, parent: String? = nil
+        ticket: String, title: String? = nil, description: String? = nil,
+        status: String? = nil, priority: String? = nil, project: String? = nil, parent: String? = nil
     ) {
         self.ticket = ticket
         self.title = title
         self.description = description
-        self.kind = kind
         self.status = status
         self.priority = priority
         self.project = project
-        self.epic = epic
         self.parent = parent
     }
 }

@@ -8,21 +8,18 @@ struct CreateTicketSheet: View {
 
     @State private var title = ""
     @State private var details = ""
-    @State private var kind: TicketKind
     @State private var projectID: String?
-    @State private var epicID: String?
     @State private var parentID: String?
     @State private var status: TicketStatus
     @State private var priority: TicketPriority
     @State private var createMore: Bool
-    @State private var tasksInProject: [Ticket] = []
+    @State private var parent: Ticket?
+    @State private var showingParentPicker = false
     @FocusState private var titleFocused: Bool
 
     init(request: CreationRequest) {
         self.request = request
-        _kind = State(initialValue: request.parentID == nil ? request.kind : .subtask)
         _projectID = State(initialValue: request.projectID)
-        _epicID = State(initialValue: request.epicID)
         _parentID = State(initialValue: request.parentID)
         _status = State(initialValue: request.status)
         _priority = State(initialValue: request.priority)
@@ -30,20 +27,17 @@ struct CreateTicketSheet: View {
     }
 
     private var canSave: Bool {
-        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            && (kind == .subtask ? parentID != nil : projectID != nil)
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && projectID != nil
     }
 
     private var projectName: String {
         app.projects.first { $0.id == projectID }?.name ?? "Project"
     }
 
-    private var epics: [Ticket] { app.epicsByProject[projectID ?? ""] ?? [] }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-            TextField("\(kind.displayName) title", text: $title)
+            TextField("Ticket title", text: $title)
                 .textFieldStyle(.plain)
                 .font(.system(size: 20, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
@@ -77,7 +71,7 @@ struct CreateTicketSheet: View {
                 Button("Cancel") { dismiss() }
                     .keyboardShortcut(.cancelAction)
                     .buttonStyle(SubtleButtonStyle())
-                Button("Create \(kind.displayName)") { save() }
+                Button("Create Ticket") { save() }
                     .keyboardShortcut(.return, modifiers: .command)
                     .buttonStyle(AccentButtonStyle())
                     .disabled(!canSave)
@@ -92,33 +86,30 @@ struct CreateTicketSheet: View {
             titleFocused = true
             if projectID == nil { projectID = app.projects.first?.id }
         }
-        .task(id: projectID) { await loadTasks() }
-        .onChange(of: projectID) {
-            if let epicID, !epics.contains(where: { $0.id == epicID }) { self.epicID = nil }
-        }
-        .onChange(of: kind) {
-            if kind != .task { epicID = nil }
+        .task(id: parentID) {
+            guard let parentID else { parent = nil; return }
+            parent = try? await app.store.ticket(id: parentID)
+            // A child defaults to its parent's project until another one is chosen.
+            if request.projectID == nil, let parent { projectID = parent.projectId }
         }
     }
 
     private var header: some View {
         HStack(spacing: 8) {
-            if kind != .subtask {
-                Menu {
-                    ForEach(app.projects) { project in
-                        Button(project.name) { projectID = project.id }
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Circle().fill(Color(hexString: app.projects.first { $0.id == projectID }?.color ?? "#5E6AD2")).frame(width: 8, height: 8)
-                        Text(projectName)
-                    }
-                    .modifier(Pill(isSet: true))
+            Menu {
+                ForEach(app.projects) { project in
+                    Button(project.name) { projectID = project.id }
                 }
-                .pillMenu()
-                Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.textTertiary)
+            } label: {
+                HStack(spacing: 6) {
+                    Circle().fill(Color(hexString: app.projects.first { $0.id == projectID }?.color ?? "#5E6AD2")).frame(width: 8, height: 8)
+                    Text(projectName)
+                }
+                .modifier(Pill(isSet: true))
             }
-            Text("New \(kind.displayName)").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
+            .pillMenu()
+            Image(systemName: "chevron.right").font(.system(size: 9, weight: .semibold)).foregroundStyle(Theme.textTertiary)
+            Text("New Ticket").font(.system(size: 13)).foregroundStyle(Theme.textPrimary)
             Spacer()
             Button {
                 dismiss()
@@ -155,57 +146,25 @@ struct CreateTicketSheet: View {
             }
             .pillMenu()
 
-            Menu {
-                ForEach(TicketKind.allCases, id: \.self) { option in
-                    Button { kind = option } label: {
-                        Label(option.displayName, systemImage: kind == option ? "checkmark" : "")
-                    }
-                }
+            Button {
+                showingParentPicker = true
             } label: {
-                HStack(spacing: 6) { Image(systemName: "square.stack.3d.up").font(.system(size: 11)); Text(kind.displayName) }
-                    .modifier(Pill(isSet: true))
-            }
-            .pillMenu()
-
-            if kind == .task {
-                Menu {
-                    Button("No epic") { epicID = nil }
-                    ForEach(epics) { epic in
-                        Button("\(epic.identifier) \(epic.title)") { epicID = epic.id }
-                    }
-                } label: {
-                    Text(epics.first { $0.id == epicID }?.title ?? "Epic")
-                        .lineLimit(1)
-                        .modifier(Pill(isSet: epicID != nil))
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.turn.down.right").font(.system(size: 11))
+                    Text(parent.map { "\($0.identifier) \($0.title)" } ?? "Parent").lineLimit(1)
                 }
-                .pillMenu()
+                .modifier(Pill(isSet: parentID != nil))
             }
-            if kind == .subtask {
-                Menu {
-                    ForEach(tasksInProject) { task in
-                        Button("\(task.identifier) \(task.title)") { parentID = task.id }
-                    }
-                } label: {
-                    Text(tasksInProject.first { $0.id == parentID }.map { "\($0.identifier) \($0.title)" } ?? "Parent task")
-                        .lineLimit(1)
-                        .modifier(Pill(isSet: parentID != nil))
+            .buttonStyle(.plain)
+            .popover(isPresented: $showingParentPicker, arrowEdge: .bottom) {
+                TicketSearchList { picked in
+                    parentID = picked
+                    showingParentPicker = false
                 }
-                .pillMenu()
+                .environment(app)
             }
             Spacer(minLength: 0)
         }
-    }
-
-    private func loadTasks() async {
-        var query = TicketQuery(kinds: [.task], includeClosed: true, includeArchivedProjects: true)
-        if let projectID { query.projectIds = [projectID] }
-        let found = (try? await app.store.tickets(matching: query).map(\.ticket)) ?? []
-        tasksInProject = found
-        if let parentID, request.parentID != nil, projectID == request.projectID || projectID == nil,
-           let parent = try? await app.store.ticket(id: parentID) {
-            if projectID == nil { projectID = parent.projectId }
-        }
-        if let parentID, !found.contains(where: { $0.id == parentID }) { self.parentID = nil }
     }
 
     private func save() {
@@ -213,10 +172,8 @@ struct CreateTicketSheet: View {
         let new = NewTicket(
             title: title,
             description: details,
-            kind: kind,
-            projectId: kind == .subtask ? nil : projectID,
-            epicId: kind == .task ? epicID : nil,
-            parentId: kind == .subtask ? parentID : nil,
+            projectId: projectID,
+            parentId: parentID,
             status: status,
             priority: priority
         )
@@ -229,9 +186,7 @@ struct CreateTicketSheet: View {
             // Present the form again, carrying the properties over, so it is clear something happened.
             let next = CreationRequest(
                 projectID: ticket.projectId,
-                kind: kind,
-                parentID: kind == .subtask ? parentID : nil,
-                epicID: kind == .task ? epicID : nil,
+                parentID: parentID,
                 status: status,
                 priority: priority,
                 createMore: true

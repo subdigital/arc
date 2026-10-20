@@ -7,8 +7,6 @@ struct TicketDetailView: View {
     let ticketID: String
 
     @State private var detail: TicketDetail?
-    @State private var tasksInProject: [Ticket] = []
-    @State private var epicTasks: [Ticket] = []
     @State private var titleDraft = ""
     @State private var descriptionDraft = ""
     @State private var isEditingDescription = false
@@ -25,7 +23,7 @@ struct TicketDetailView: View {
                 HStack(spacing: 0) {
                     main(detail)
                     Rectangle().fill(Theme.border).frame(width: 1)
-                    PropertiesPanel(detail: detail, tasksInProject: tasksInProject)
+                    PropertiesPanel(detail: detail)
                         .frame(width: 260)
                 }
             } else {
@@ -66,14 +64,6 @@ struct TicketDetailView: View {
             detail = loaded
             if !titleFocused { titleDraft = loaded.ticket.title }
             if !isEditingDescription { descriptionDraft = loaded.ticket.description }
-            var query = TicketQuery(kinds: [.task], includeClosed: true, includeArchivedProjects: true)
-            query.projectIds = [loaded.ticket.projectId]
-            tasksInProject = try await app.store.tickets(matching: query).map(\.ticket)
-            if loaded.ticket.kind == .epic {
-                epicTasks = try await app.store.tickets(
-                    matching: TicketQuery(kinds: [.task], epicId: loaded.ticket.id, includeClosed: true, includeArchivedProjects: true)
-                ).map(\.ticket)
-            }
         } catch let error as ArcError where error.code == .notFound {
             app.goBack() // deleted elsewhere
         } catch {
@@ -89,8 +79,7 @@ struct TicketDetailView: View {
                 header(detail)
                 titleField(detail)
                 descriptionSection(detail)
-                if detail.ticket.kind == .task { subtasksSection(detail) }
-                if detail.ticket.kind == .epic { epicTasksSection(detail) }
+                childrenSection(detail)
                 commentsSection(detail)
             }
             .padding(.horizontal, 32)
@@ -173,7 +162,7 @@ struct TicketDetailView: View {
         } else {
             MarkdownView(
                 detail.ticket.description,
-                knownTickets: app.knownTicketNumbers,
+                knownTickets: app.knownTicketIdentifiers,
                 style: Theme.markdownStyle,
                 highlighter: HighlightSwiftHighlighter.shared,
                 onSourceChange: { updated in
@@ -212,24 +201,33 @@ struct TicketDetailView: View {
         Task { await persistDescription() }
     }
 
-    // MARK: Subtasks
+    // MARK: Sub-tickets
 
-    private func subtasksSection(_ detail: TicketDetail) -> some View {
+    private func childrenSection(_ detail: TicketDetail) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text("Subtasks").font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
-                if !detail.subtasks.isEmpty {
-                    let done = detail.subtasks.filter { $0.status == .done }.count
-                    Text("\(done)/\(detail.subtasks.count)").font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
+                Text("Sub-tickets").font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
+                let counted = detail.children.filter { $0.status != .canceled }
+                if !counted.isEmpty {
+                    Text("\(counted.filter { $0.status == .done }.count)/\(counted.count)")
+                        .font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
                 }
+                Spacer()
+                Button {
+                    app.creation = CreationRequest(projectID: detail.ticket.projectId, parentID: detail.ticket.id)
+                } label: {
+                    Label("Add sub-ticket", systemImage: "plus").font(Theme.metaFont)
+                }
+                .buttonStyle(SubtleButtonStyle())
+                .help("Add a sub-ticket with all its properties")
             }
             VStack(spacing: 0) {
-                ForEach(detail.subtasks) { subtask in
-                    SubtaskRow(subtask: subtask)
+                ForEach(detail.children) { child in
+                    SubtaskRow(subtask: child)
                 }
                 HStack(spacing: 8) {
                     Image(systemName: "plus").font(.system(size: 11)).foregroundStyle(Theme.textTertiary).frame(width: 14)
-                    TextField("Add subtask…", text: $newSubtask)
+                    TextField("Add sub-ticket…", text: $newSubtask)
                         .textFieldStyle(.plain)
                         .font(Theme.rowFont)
                         .onSubmit { addSubtask(to: detail) }
@@ -242,43 +240,13 @@ struct TicketDetailView: View {
         }
     }
 
-    private func epicTasksSection(_ detail: TicketDetail) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
-                Text("Tasks").font(Theme.headerFont).foregroundStyle(Theme.textPrimary)
-                let counted = epicTasks.filter { $0.status != .canceled }
-                if !counted.isEmpty {
-                    Text("\(counted.filter { $0.status == .done }.count)/\(counted.count)")
-                        .font(Theme.metaFont).foregroundStyle(Theme.textSecondary)
-                }
-                Spacer()
-                Button {
-                    app.creation = CreationRequest(projectID: detail.ticket.projectId, epicID: detail.ticket.id)
-                } label: {
-                    Label("Add task", systemImage: "plus").font(Theme.metaFont)
-                }
-                .buttonStyle(SubtleButtonStyle())
-                .help("Add a task to this epic")
-            }
-            if !epicTasks.isEmpty {
-                VStack(spacing: 0) {
-                    ForEach(epicTasks) { task in SubtaskRow(subtask: task) }
-                }
-                .background(Theme.bgSidebar, in: RoundedRectangle(cornerRadius: 6))
-                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(Theme.border, lineWidth: 1))
-            } else {
-                Text("No tasks yet").font(Theme.rowFont).foregroundStyle(Theme.textTertiary)
-            }
-        }
-    }
-
     private func addSubtask(to detail: TicketDetail) {
         let title = newSubtask.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !title.isEmpty else { return }
         newSubtask = ""
         Task {
             await app.perform {
-                try await app.store.createTicket(NewTicket(title: title, kind: .subtask, parentId: detail.ticket.id))
+                try await app.store.createTicket(NewTicket(title: title, projectId: detail.ticket.projectId, parentId: detail.ticket.id))
             }
         }
     }
@@ -387,7 +355,7 @@ private struct CommentView: View {
             }
             MarkdownView(
                 comment.body,
-                knownTickets: app.knownTicketNumbers,
+                knownTickets: app.knownTicketIdentifiers,
                 style: Theme.markdownStyle,
                 highlighter: HighlightSwiftHighlighter.shared,
                 onSourceChange: { updated in
@@ -406,7 +374,7 @@ private struct CommentView: View {
 private struct PropertiesPanel: View {
     @Environment(AppModel.self) private var app
     let detail: TicketDetail
-    let tasksInProject: [Ticket]
+    @State private var showingParentPicker = false
 
     private var ticket: Ticket { detail.ticket }
 
@@ -454,38 +422,22 @@ private struct PropertiesPanel: View {
                             Text(detail.project.name)
                         }
                     }
-                    .disabled(ticket.kind == .subtask)
-                    .help(ticket.kind == .subtask ? "A subtask follows its parent's project" : "Move to another project")
                 }
-                if ticket.kind == .task {
-                    property("Epic") {
-                        Menu {
-                            Button("No epic") { Task { await app.setEpic(nil, for: ticket.id) } }
-                            ForEach(app.epicsByProject[ticket.projectId] ?? []) { epic in
-                                Button("\(epic.identifier) \(epic.title)") { Task { await app.setEpic(epic.id, for: ticket.id) } }
-                            }
-                        } label: {
-                            Text(detail.epic.map { "\($0.identifier) \($0.title)" } ?? "No epic")
-                                .foregroundStyle(detail.epic == nil ? Theme.textTertiary : Theme.textPrimary)
-                        }
+                property("Parent") {
+                    Button {
+                        showingParentPicker = true
+                    } label: {
+                        Text(detail.parent.map { "\($0.identifier) \($0.title)" } ?? "No parent")
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .foregroundStyle(detail.parent == nil ? Theme.textTertiary : Theme.textPrimary)
                     }
-                }
-                if ticket.kind == .subtask, let epic = detail.epic {
-                    property("Epic") {
-                        Text("\(epic.identifier) \(epic.title)").lineLimit(2).foregroundStyle(Theme.textSecondary)
-                    }
-                }
-                if ticket.kind != .epic {
-                    property("Parent") {
-                        Menu {
-                            Button("No parent") { Task { await setParent(nil) } }
-                            ForEach(tasksInProject.filter { $0.id != ticket.id }) { task in
-                                Button("\(task.identifier) \(task.title)") { Task { await setParent(task.id) } }
-                            }
-                        } label: {
-                            Text(detail.parent.map { "\($0.identifier) \($0.title)" } ?? "No parent")
-                                .foregroundStyle(detail.parent == nil ? Theme.textTertiary : Theme.textPrimary)
+                    .popover(isPresented: $showingParentPicker, arrowEdge: .leading) {
+                        TicketSearchList(excluding: [ticket.id]) { parentID in
+                            showingParentPicker = false
+                            Task { await app.setParent(parentID, for: [ticket.id]) }
                         }
+                        .environment(app)
                     }
                 }
 
@@ -500,18 +452,6 @@ private struct PropertiesPanel: View {
             .padding(16)
         }
         .background(Theme.bgSidebar)
-    }
-
-    private func setParent(_ parentID: String?) async {
-        if let parentID {
-            await app.perform {
-                try await app.store.updateTicket(id: ticket.id, TicketPatch(kind: .subtask, parentId: .set(parentID)))
-            }
-        } else {
-            await app.perform {
-                try await app.store.updateTicket(id: ticket.id, TicketPatch(kind: .task, parentId: .set(nil)))
-            }
-        }
     }
 
     private func property<Content: View>(_ name: String, @ViewBuilder content: () -> Content) -> some View {

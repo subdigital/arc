@@ -56,8 +56,8 @@ import Testing
     @Test func deleteCascadesToTicketsAndComments() async throws {
         let store = try makeStore()
         let project = try await store.createProject(name: "Website")
-        let epic = try await store.epic("Launch", in: project)
-        let first = try await store.task("One", in: project, epic: epic)
+        let epic = try await store.task("Launch", in: project)
+        let first = try await store.task("One", in: project, parent: epic)
         try await store.task("Two", in: project)
         try await store.task("Three", in: project)
         try await store.addComment(ticketId: first.id, body: "hi", author: .user)

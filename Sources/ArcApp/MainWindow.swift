@@ -20,6 +20,9 @@ struct MainWindow: View {
         .sheet(item: $app.creation) { request in
             CreateTicketSheet(request: request).environment(app).preferredColorScheme(.dark)
         }
+        .sheet(isPresented: Binding(get: { app.parentPicking != nil }, set: { if !$0 { app.parentPicking = nil } })) {
+            ParentPickerSheet(ticketIDs: app.parentPicking ?? []).environment(app)
+        }
         .sheet(item: $app.projectEditor) { request in
             ProjectEditorSheet(request: request).environment(app).preferredColorScheme(.dark)
         }
@@ -38,11 +41,11 @@ struct MainWindow: View {
             }
             Button("Cancel", role: .cancel) { app.pendingDeletionIDs = [] }
         } message: {
-            Text("Deleting a task also deletes its subtasks and all comments. This cannot be undone.")
+            Text("Deleting a ticket also deletes its comments; its sub-tickets are kept. This cannot be undone.")
         }
         .environment(\.openURL, OpenURLAction { url in
-            if let number = MarkdownLinks.ticketNumber(from: url) {
-                Task { await app.open(ticketNumber: number) }
+            if let identifier = MarkdownLinks.ticketIdentifier(from: url) {
+                Task { await app.open(ticketIdentifier: identifier) }
                 return .handled
             }
             return .systemAction
@@ -88,7 +91,7 @@ private struct ContentRoot: View {
                     .navigationDestination(for: Route.self) { route in
                         switch route {
                         case .ticket(let id): TicketDetailView(ticketID: id)
-                        case .epic(let id): TicketsView(scope: .epic(id), app: app).id(id)
+                        case .children(let id): TicketsView(scope: .children(id), app: app).id(id)
                         }
                     }
             }
@@ -100,7 +103,7 @@ private struct ContentRoot: View {
         switch app.selection {
         case .allTasks: TicketsView(scope: .allTasks, app: app).id("all")
         case .project(let id): TicketsView(scope: .project(id), app: app).id(id)
-        case .epics: EpicsOverview()
+        case .parents: ParentsOverview()
         }
     }
 }

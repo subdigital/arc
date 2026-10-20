@@ -1,12 +1,6 @@
 import Foundation
 import GRDB
 
-public enum TicketKind: String, Codable, Sendable, CaseIterable, DatabaseValueConvertible {
-    case epic, task, subtask
-
-    public var displayName: String { rawValue.capitalized }
-}
-
 public enum TicketStatus: String, Codable, Sendable, CaseIterable, DatabaseValueConvertible, Comparable {
     case backlog
     case todo
@@ -104,10 +98,10 @@ public struct Ticket: Codable, FetchableRecord, PersistableRecord, Sendable, Has
     public static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.timeIntervalSince1970
 
     public var id: String
+    /// Key prefix: `ARC` for tickets created here, the source's key (e.g. `FIC`) for imported ones.
+    public var prefix: String
     public var number: Int
-    public var kind: TicketKind
     public var projectId: String
-    public var epicId: String?
     public var parentId: String?
     public var title: String
     public var description: String
@@ -118,7 +112,7 @@ public struct Ticket: Codable, FetchableRecord, PersistableRecord, Sendable, Has
     public var updatedAt: Date
     public var completedAt: Date?
 
-    public var identifier: String { Reference.identifier(for: number) }
+    public var identifier: String { "\(prefix)-\(number)" }
 }
 
 public struct Comment: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {

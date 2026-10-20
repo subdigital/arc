@@ -37,7 +37,7 @@ import Testing
             }
         }
         let listTickets = try #require(ArcTools.tool(named: "list_tickets")?.inputSchema.objectValue?["properties"]?.objectValue)
-        #expect(Set(listTickets.keys) == ["project", "kind", "status", "priority", "epic", "parent", "query", "include_closed", "limit"])
+        #expect(Set(listTickets.keys) == ["project", "status", "priority", "parent", "query", "include_closed", "limit"])
     }
 
     @Test func createListGetUpdateAndCommentFlow() async throws {
@@ -83,15 +83,24 @@ import Testing
         #expect((statusList as? [[String: Any]])?.count == 2)
     }
 
-    @Test func invalidSubtaskParentIsAnError() async throws {
+    @Test func parentCycleIsAnError() async throws {
         let ops = try operations()
         _ = try await call("create_project", ["name": "API"], ops)
-        _ = try await call("create_ticket", ["title": "Epic", "project": "API", "kind": "epic"], ops)
-        let (outcome, body) = try await call("create_ticket", ["title": "Sub", "kind": "subtask", "parent": "ARC-1"], ops)
+        _ = try await call("create_ticket", ["title": "Top", "project": "API"], ops)
+        _ = try await call("create_ticket", ["title": "Child", "parent": "ARC-1"], ops)
+        let (outcome, body) = try await call("update_ticket", ["ticket": "ARC-1", "parent": "ARC-2"], ops)
         #expect(outcome.isError)
         let error = try #require((body as? [String: Any])?["error"] as? [String: Any])
         #expect(error["code"] as? String == "invalid_argument")
-        #expect((error["message"] as? String)?.contains("Subtasks can only belong to tasks") == true)
+        #expect((error["message"] as? String)?.contains("descendant") == true)
+    }
+
+    @Test func importedKeysResolve() async throws {
+        let ops = try operations()
+        _ = try await call("create_project", ["name": "API"], ops)
+        let (outcome, body) = try await call("get_ticket", ["ticket": "FIC-123"], ops)
+        #expect(outcome.isError)
+        #expect(((body as? [String: Any])?["error"] as? [String: Any])?["message"] as? String == "Ticket FIC-123 not found.")
     }
 
     @Test func argumentProblemsAreReportedNotThrown() async throws {

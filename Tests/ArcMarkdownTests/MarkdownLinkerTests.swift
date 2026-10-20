@@ -25,15 +25,28 @@ import Testing
     }
 
     private func linked(_ source: String, known: Set<Int>, urls: Bool = true) -> [(String, URL)] {
-        links(MarkdownLinker.link(MarkdownParser.parse(source), knownTickets: known, detectURLs: urls))
+        linked(source, identifiers: Set(known.map { "ARC-\($0)" }), urls: urls)
+    }
+
+    private func linked(_ source: String, identifiers: Set<String>, urls: Bool = true) -> [(String, URL)] {
+        links(MarkdownLinker.link(MarkdownParser.parse(source), knownTickets: identifiers, detectURLs: urls))
+    }
+
+    @Test func importedPrefixesAreLinkedToo() {
+        let result = linked("Duplicate of fic-123, not FIC-9 or ARC-1.", identifiers: ["FIC-123", "ARC-1"])
+        #expect(result.map(\.0) == ["fic-123", "ARC-1"])
+        #expect(result[0].1 == URL(string: "arc://ticket/FIC-123"))
+        #expect(MarkdownLinker.ticketIdentifier(from: result[0].1) == "FIC-123")
+        #expect(MarkdownLinker.ticketIdentifier(from: URL(string: "arc://ticket/7")!) == "ARC-7")
+        #expect(MarkdownLinker.ticketIdentifier(from: URL(string: "https://example.com/FIC-1")!) == nil)
     }
 
     @Test func knownTicketIsLinked() {
         let result = linked("Blocked by ARC-12 until Friday", known: [12])
         #expect(result.count == 1)
         #expect(result[0].0 == "ARC-12")
-        #expect(result[0].1 == URL(string: "arc://ticket/12"))
-        #expect(MarkdownLinker.ticketNumber(from: result[0].1) == 12)
+        #expect(result[0].1 == URL(string: "arc://ticket/ARC-12"))
+        #expect(MarkdownLinker.ticketIdentifier(from: result[0].1) == "ARC-12")
     }
 
     @Test func caseInsensitiveAndMultiple() {
@@ -64,7 +77,7 @@ import Testing
         let result = linked("[see ARC-12](https://example.com/x) and ARC-12", known: [12])
         #expect(result.count == 2)
         #expect(result[0].1 == URL(string: "https://example.com/x"))
-        #expect(result[1].1 == URL(string: "arc://ticket/12"))
+        #expect(result[1].1 == URL(string: "arc://ticket/ARC-12"))
     }
 
     @Test func bareURLsBecomeLinksWithoutTrailingPunctuation() {

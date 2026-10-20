@@ -99,8 +99,8 @@ struct TicketRowView: View {
                 .lineLimit(1)
             Spacer(minLength: 12)
             Group {
-                if let epic = summary.epic, ticket.kind != .epic {
-                    Text(epic.title)
+                if let parent = summary.parent, !item.isNested {
+                    Text(parent.title)
                         .font(Theme.metaFont)
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
@@ -111,10 +111,10 @@ struct TicketRowView: View {
             }
             .frame(width: 150, alignment: .leading)
             Group {
-                if summary.subtaskCount > 0 {
+                if summary.childCount > 0 {
                     HStack(spacing: 3) {
                         Image(systemName: "checklist").font(.system(size: 10))
-                        Text("\(summary.subtasksDone)/\(summary.subtaskCount)").font(Theme.metaFont.monospacedDigit())
+                        Text("\(summary.childrenDone)/\(summary.childCount)").font(Theme.metaFont.monospacedDigit())
                     }
                     .foregroundStyle(Theme.textSecondary)
                 }
@@ -132,7 +132,7 @@ struct TicketRowView: View {
                 .foregroundStyle(Theme.textTertiary)
                 .frame(width: 48, alignment: .trailing)
         }
-        .padding(.leading, item.isNested ? 40 : 10)
+        .padding(.leading, 10 + CGFloat(item.depth) * 30)
         .padding(.trailing, 14)
         .frame(height: Theme.rowHeight)
         .background(isChecked ? Theme.accent.opacity(0.18) : (isSelected ? Theme.bgSelected : (hovering ? Theme.bgHover : Color.clear)))

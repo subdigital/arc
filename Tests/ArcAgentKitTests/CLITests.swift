@@ -7,7 +7,7 @@ import Testing
         let db = temporaryDatabasePath()
         let result = try runArc(["create", "--help"], db: db)
         #expect(result.status == 0)
-        for option in ["--title", "--project", "--kind", "--description", "--epic", "--parent", "--status", "--priority", "--json"] {
+        for option in ["--title", "--project", "--description", "--parent", "--status", "--priority", "--json"] {
             #expect(result.stdout.contains(option), "missing \(option)")
         }
         #expect(!FileManager.default.fileExists(atPath: db), "--help must not touch the database")
@@ -78,18 +78,15 @@ import Testing
         let db = temporaryDatabasePath()
         try runArc(["project", "create", "Website"], db: db)
         try runArc(["project", "create", "API"], db: db)
-        try runArc(["create", "--project", "Website", "--kind", "epic", "--title", "Launch"], db: db)                 // 1
-        try runArc(["create", "--project", "Website", "--title", "Footer", "--epic", "ARC-1", "--priority", "high"], db: db) // 2
+        try runArc(["create", "--project", "Website", "--title", "Launch"], db: db)                                   // 1
+        try runArc(["create", "--project", "Website", "--title", "Footer", "--parent", "ARC-1", "--priority", "high"], db: db) // 2
         try runArc(["create", "--parent", "2", "--title", "Footer links"], db: db)                                     // 3
         try runArc(["create", "--project", "API", "--title", "OAuth", "--status", "in_progress"], db: db)             // 4
 
         func identifiers(_ args: [String]) throws -> [String] {
             try runArc(["list"] + args + ["--json"], db: db).jsonArray().compactMap { $0["identifier"] as? String }
         }
-        #expect(try identifiers(["--kind", "epic"]) == ["ARC-1"])
-        #expect(try identifiers(["--kind", "task", "--kind", "subtask"]).sorted() == ["ARC-2", "ARC-3", "ARC-4"])
         #expect(try identifiers(["--priority", "high"]) == ["ARC-2"])
-        #expect(try identifiers(["--epic", "ARC-1"]) == ["ARC-3", "ARC-2"])
         #expect(try identifiers(["--parent", "ARC-2"]) == ["ARC-3"])
         #expect(try identifiers(["--status", "In Progress"]) == ["ARC-4"])
         #expect(try identifiers(["--query", "oauth"]) == ["ARC-4"])
@@ -99,21 +96,20 @@ import Testing
     @Test func showIncludesEveryField() throws {
         let db = temporaryDatabasePath()
         try runArc(["project", "create", "Website"], db: db)
-        try runArc(["create", "--project", "Website", "--kind", "epic", "--title", "Launch"], db: db)
-        try runArc(["create", "--project", "Website", "--title", "Footer", "--epic", "1", "--description", "Body"], db: db)
+        try runArc(["create", "--project", "Website", "--title", "Launch"], db: db)
+        try runArc(["create", "--project", "Website", "--title", "Footer", "--parent", "1", "--description", "Body"], db: db)
         try runArc(["create", "--parent", "2", "--title", "Links"], db: db)
         try runArc(["comment", "ARC-2", "hello"], db: db)
 
         let task = try runArc(["show", "ARC-2", "--json"], db: db).json()
-        for key in ["identifier", "kind", "title", "description", "status", "priority", "project", "epic", "parent",
-                    "subtasks", "comments", "createdAt", "updatedAt", "completedAt"] {
+        for key in ["identifier", "title", "description", "status", "priority", "project", "parent",
+                    "children", "comments", "createdAt", "updatedAt", "completedAt"] {
             #expect(task.keys.contains(key), "missing \(key)")
         }
         #expect(task["identifier"] as? String == "ARC-2")
-        #expect((task["epic"] as? [String: Any])?["identifier"] as? String == "ARC-1")
-        #expect(task["parent"] is NSNull)
+        #expect((task["parent"] as? [String: Any])?["identifier"] as? String == "ARC-1")
         #expect(task["completedAt"] is NSNull)
-        #expect((task["subtasks"] as? [[String: Any]])?.count == 1)
+        #expect((task["children"] as? [[String: Any]])?.count == 1)
         #expect((task["comments"] as? [[String: Any]])?.first?["author"] as? String == "agent")
         #expect(((task["project"] as? [String: Any])?["name"]) as? String == "Website")
 
@@ -160,28 +156,36 @@ import Testing
         #expect((try bad.json()["error"] as? [String: Any])?["code"] as? String == "invalid_argument")
     }
 
-    @Test func createSubtaskWithOnlyParent() throws {
+    @Test func createChildWithOnlyParent() throws {
         let db = temporaryDatabasePath()
         try runArc(["project", "create", "Website"], db: db)
         try runArc(["create", "--project", "Website", "--title", "Parent"], db: db)
         let result = try runArc(["create", "--parent", "ARC-1", "--title", "Add tests", "--json"], db: db)
         #expect(result.status == 0)
-        let subtask = try result.json()
-        #expect(subtask["identifier"] as? String == "ARC-2")
-        #expect(subtask["kind"] as? String == "subtask")
-        #expect(((subtask["project"] as? [String: Any])?["name"]) as? String == "Website")
-        #expect((subtask["parent"] as? [String: Any])?["identifier"] as? String == "ARC-1")
+        let child = try result.json()
+        #expect(child["identifier"] as? String == "ARC-2")
+        #expect(((child["project"] as? [String: Any])?["name"]) as? String == "Website")
+        #expect((child["parent"] as? [String: Any])?["identifier"] as? String == "ARC-1")
     }
 
-    @Test func nestedSubtaskRejected() throws {
+    @Test func nestingHasNoDepthLimitButCyclesAreRejected() throws {
         let db = temporaryDatabasePath()
         try runArc(["project", "create", "Website"], db: db)
         try runArc(["create", "--project", "Website", "--title", "Parent"], db: db)
         try runArc(["create", "--parent", "1", "--title", "Child"], db: db)
-        let result = try runArc(["create", "--parent", "2", "--title", "Grandchild", "--json"], db: db)
-        #expect(result.status == 1)
-        let message = (try result.json()["error"] as? [String: Any])?["message"] as? String
-        #expect(message?.contains("Subtasks can only belong to tasks") == true)
+        let grandchild = try runArc(["create", "--parent", "2", "--title", "Grandchild", "--json"], db: db)
+        #expect(grandchild.status == 0)
+        let cycle = try runArc(["update", "1", "--parent", "3", "--json"], db: db)
+        #expect(cycle.status == 1)
+        let message = (try cycle.json()["error"] as? [String: Any])?["message"] as? String
+        #expect(message?.contains("descendant") == true)
+    }
+
+    @Test func importedKeysAreAcceptedAndBareNumbersMeanArc() throws {
+        let db = temporaryDatabasePath()
+        let missing = try runArc(["show", "fic-7", "--json"], db: db)
+        #expect(missing.status == 1)
+        #expect((try missing.json()["error"] as? [String: Any])?["message"] as? String == "Ticket FIC-7 not found.")
     }
 
     @Test func descriptionFromStdin() throws {
@@ -199,13 +203,13 @@ import Testing
         #expect(stored["description"] as? String == "Replaced *text*")
     }
 
-    @Test func clearingEpicAndParent() throws {
+    @Test func clearingParent() throws {
         let db = temporaryDatabasePath()
         try runArc(["project", "create", "Website"], db: db)
-        try runArc(["create", "--project", "Website", "--kind", "epic", "--title", "E"], db: db)
-        try runArc(["create", "--project", "Website", "--title", "T", "--epic", "1"], db: db)
-        let cleared = try runArc(["update", "2", "--epic", "none", "--json"], db: db).json()
-        #expect(cleared["epic"] is NSNull)
+        try runArc(["create", "--project", "Website", "--title", "E"], db: db)
+        try runArc(["create", "--project", "Website", "--title", "T", "--parent", "1"], db: db)
+        let cleared = try runArc(["update", "2", "--parent", "none", "--json"], db: db).json()
+        #expect(cleared["parent"] is NSNull)
     }
 
     @Test func commentRecordsAgentAuthorAndReadsStdin() throws {

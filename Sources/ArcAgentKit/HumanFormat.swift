@@ -35,13 +35,13 @@ public enum HumanFormat {
     public static func tickets(_ tickets: [TicketDTO]) -> String {
         guard !tickets.isEmpty else { return "No tickets." }
         return table(
-            ["ID", "STATUS", "PRIORITY", "KIND", "TITLE", "PROJECT", "EPIC"],
+            ["ID", "STATUS", "PRIORITY", "TITLE", "PROJECT", "PARENT"],
             tickets.map { ticket in
                 var title = ticket.title
-                if let progress = ticket.subtaskProgress { title += " [\(progress.done)/\(progress.total)]" }
+                if let progress = ticket.childProgress { title += " [\(progress.done)/\(progress.total)]" }
                 return [
-                    ticket.identifier, ticket.status, ticket.priority, ticket.kind, title,
-                    ticket.project.name, ticket.epic?.identifier ?? "",
+                    ticket.identifier, ticket.status, ticket.priority, title,
+                    ticket.project.name, ticket.parent?.identifier ?? "",
                 ]
             }
         )
@@ -49,9 +49,8 @@ public enum HumanFormat {
 
     public static func ticket(_ ticket: TicketDTO) -> String {
         var lines = ["\(ticket.identifier)  \(ticket.title)"]
-        lines.append("Kind: \(ticket.kind)   Status: \(ticket.status)   Priority: \(ticket.priority)")
+        lines.append("Status: \(ticket.status)   Priority: \(ticket.priority)")
         lines.append("Project: \(ticket.project.name)")
-        if let epic = ticket.epic { lines.append("Epic: \(epic.identifier) \(epic.title)") }
         if let parent = ticket.parent { lines.append("Parent: \(parent.identifier) \(parent.title)") }
         lines.append("Created: \(iso(ticket.createdAt))   Updated: \(iso(ticket.updatedAt))")
         if let completed = ticket.completedAt { lines.append("Completed: \(iso(completed))") }
@@ -59,10 +58,10 @@ public enum HumanFormat {
             lines.append("")
             lines.append(description)
         }
-        if let subtasks = ticket.subtasks, !subtasks.isEmpty {
+        if let children = ticket.children, !children.isEmpty {
             lines.append("")
-            lines.append("Subtasks:")
-            lines += subtasks.map { "  \($0.identifier)  [\($0.status)]  \($0.title)" }
+            lines.append("Children:")
+            lines += children.map { "  \($0.identifier)  [\($0.status)]  \($0.title)" }
         }
         if let comments = ticket.comments, !comments.isEmpty {
             lines.append("")

@@ -6,13 +6,13 @@ import Observation
 /// What the sidebar has selected.
 enum SidebarSelection: Hashable, Sendable {
     case allTasks
-    case epics
+    case parents
     case project(String)
 
     var scope: Scope? {
         switch self {
         case .allTasks: .allTasks
-        case .epics: nil
+        case .parents: nil
         case .project(let id): .project(id)
         }
     }
@@ -21,7 +21,7 @@ enum SidebarSelection: Hashable, Sendable {
 /// Pushed onto the content `NavigationStack`.
 enum Route: Hashable, Sendable {
     case ticket(String)
-    case epic(String)
+    case children(String)
 }
 
 /// Which ticket property picker the keyboard asked for (S / P).
@@ -72,12 +72,13 @@ final class AppModel {
         if let saved = defaults.string(forKey: "navigation.selection") {
             switch saved {
             case "all": selection = .allTasks
-            case "epics": selection = .epics
+            case "parents", "epics": selection = .parents
             default: if saved.hasPrefix("project:") { selection = .project(String(saved.dropFirst(8))) }
             }
             path = (defaults.stringArray(forKey: "navigation.path") ?? []).compactMap { entry in
                 if entry.hasPrefix("ticket:") { return .ticket(String(entry.dropFirst(7))) }
-                if entry.hasPrefix("epic:") { return .epic(String(entry.dropFirst(5))) }
+                if entry.hasPrefix("children:") { return .children(String(entry.dropFirst(9))) }
+                if entry.hasPrefix("epic:") { return .children(String(entry.dropFirst(5))) }
                 return nil
             }
         }
@@ -88,14 +89,14 @@ final class AppModel {
         guard let defaults = navigationDefaults else { return }
         let saved: String = switch selection {
         case .allTasks: "all"
-        case .epics: "epics"
+        case .parents: "parents"
         case .project(let id): "project:\(id)"
         }
         defaults.set(saved, forKey: "navigation.selection")
         defaults.set(path.map { route in
             switch route {
             case .ticket(let id): "ticket:\(id)"
-            case .epic(let id): "epic:\(id)"
+            case .children(let id): "children:\(id)"
             }
         }, forKey: "navigation.path")
     }
@@ -132,11 +133,11 @@ final class AppModel {
 
     private(set) var projects: [Project] = []
     private(set) var archivedProjects: [Project] = []
-    /// Numbers of every existing ticket: only these `ARC-n` references become links.
-    private(set) var knownTicketNumbers: Set<Int> = []
+    /// Identifiers of every existing ticket (uppercased): only references to these become links.
+    private(set) var knownTicketIdentifiers: Set<String> = []
     private(set) var hasLoaded = false
-    /// Epics by project id, for the Epic submenu and pickers.
-    private(set) var epicsByProject: [String: [Ticket]] = [:]
+    /// Tickets the "Set Parent" picker is choosing a parent for.
+    var parentPicking: [String]?
 
     var creation: CreationRequest?
     var projectEditor: ProjectEditorRequest?
@@ -216,7 +217,7 @@ final class AppModel {
             case 53 where !path.isEmpty:  // Esc leaves the ticket page
                 goBack()
                 return true
-            case 51 where path.isEmpty && selection != .epics, 117 where path.isEmpty && selection != .epics:  // Delete / Backspace
+            case 51 where path.isEmpty && selection != .parents, 117 where path.isEmpty && selection != .parents:  // Delete / Backspace
                 let targets = actionTargets
                 guard !targets.isEmpty else { return false }
                 pendingDeletionIDs = targets
@@ -260,11 +261,7 @@ final class AppModel {
             let allProjects = try await store.projects(includeArchived: true)
             projects = allProjects.filter { !$0.isArchived }
             archivedProjects = allProjects.filter(\.isArchived)
-            knownTicketNumbers = try await store.ticketNumbers()
-            let epics = try await store.tickets(matching: TicketQuery(
-                kinds: [.epic], includeClosed: true, includeArchivedProjects: true
-            ))
-            epicsByProject = Dictionary(grouping: epics.map(\.ticket), by: \.projectId)
+            knownTicketIdentifiers = try await store.ticketIdentifiers()
             hasLoaded = true
 
             // A selected project that was deleted or archived elsewhere falls back to All Tasks.
@@ -286,9 +283,9 @@ final class AppModel {
         if path.last != .ticket(id) { path.append(.ticket(id)) }
     }
 
-    func open(ticketNumber number: Int) async {
+    func open(ticketIdentifier identifier: String) async {
         do {
-            let ticket = try await store.resolveTicket(String(number))
+            let ticket = try await store.resolveTicket(identifier)
             open(ticket: ticket.id)
         } catch {
             present(error)
@@ -327,8 +324,8 @@ final class AppModel {
         await perform { try await store.updateTicket(id: id, TicketPatch(priority: priority)) }
     }
 
-    func setEpic(_ epicID: String?, for id: String) async {
-        await perform { try await store.updateTicket(id: id, TicketPatch(epicId: .set(epicID))) }
+    func setParent(_ parentID: String?, for ids: [String]) async {
+        await bulkUpdate(ids, TicketPatch(parentId: .set(parentID)), done: "Updated")
     }
 
     func move(_ id: String, toProject projectID: String) async {
@@ -428,9 +425,7 @@ struct Toast: Identifiable, Equatable {
 struct CreationRequest: Identifiable {
     let id = UUID()
     var projectID: String?
-    var kind: TicketKind = .task
     var parentID: String?
-    var epicID: String?
     var status: TicketStatus = .todo
     var priority: TicketPriority = .none
     /// Set when the form was reopened by "Create more": the toggle starts on.

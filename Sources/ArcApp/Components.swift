@@ -88,22 +88,16 @@ struct TicketContextMenu: ViewModifier {
                     Task { await app.bulkUpdate(targets, TicketPatch(priority: priority), done: "Updated") }
                 }
             }
-            if ticket.kind == .task {
-                Menu("Epic") {
-                    Button("No Epic") { Task { await app.bulkUpdate(targets, TicketPatch(epicId: .set(nil)), done: "Updated") } }
-                    ForEach(app.epicsByProject[ticket.projectId] ?? []) { epic in
-                        Button("\(epic.identifier) \(epic.title)") {
-                            Task { await app.bulkUpdate(targets, TicketPatch(epicId: .set(epic.id)), done: "Updated") }
-                        }
-                    }
+            Menu("Parent") {
+                Button("Set Parent…") { app.parentPicking = targets }
+                if many || ticket.parentId != nil {
+                    Button("Remove Parent") { Task { await app.setParent(nil, for: targets) } }
                 }
             }
-            if ticket.kind != .subtask {
-                Menu("Move to Project") {
-                    ForEach(app.projects) { project in
-                        Button(project.name) { Task { await app.bulkUpdate(targets, TicketPatch(projectId: project.id), done: "Moved") } }
-                            .disabled(!many && project.id == ticket.projectId)
-                    }
+            Menu("Move to Project") {
+                ForEach(app.projects) { project in
+                    Button(project.name) { Task { await app.bulkUpdate(targets, TicketPatch(projectId: project.id), done: "Moved") } }
+                        .disabled(!many && project.id == ticket.projectId)
                 }
             }
             Divider()

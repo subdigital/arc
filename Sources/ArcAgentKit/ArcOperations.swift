@@ -49,10 +49,8 @@ public struct ArcOperations: Sendable {
         if let project = request.project {
             query.projectIds = [try await store.resolveProject(project).id]
         }
-        query.kinds = Set(try (request.kind?.values ?? []).map(Reference.kind))
         query.statuses = Set(try (request.status?.values ?? []).map(Reference.status))
         query.priorities = Set(try (request.priority?.values ?? []).map(Reference.priority))
-        if let epic = request.epic { query.epicId = try await store.resolveTicket(epic).id }
         if let parent = request.parent { query.parentId = try await store.resolveTicket(parent).id }
         query.text = request.query
 
@@ -68,12 +66,6 @@ public struct ArcOperations: Sendable {
         var new = NewTicket(title: request.title)
         if let project = request.project { new.projectId = try await store.resolveProject(project).id }
         if let parent = request.parent { new.parentId = try await store.resolveTicket(parent).id }
-        if let epic = request.epic { new.epicId = try await store.resolveTicket(epic).id }
-        if let kind = request.kind {
-            new.kind = try Reference.kind(kind)
-        } else if new.parentId != nil {
-            new.kind = .subtask
-        }
         if let description = request.description { new.description = description }
         if let status = request.status { new.status = try Reference.status(status) }
         if let priority = request.priority { new.priority = try Reference.priority(priority) }
@@ -86,11 +78,9 @@ public struct ArcOperations: Sendable {
     public func updateTicket(_ request: UpdateTicketRequest) async throws -> TicketDTO {
         let current = try await store.resolveTicket(request.ticket)
         var patch = TicketPatch(title: request.title, description: request.description)
-        if let kind = request.kind { patch.kind = try Reference.kind(kind) }
         if let status = request.status { patch.status = try Reference.status(status) }
         if let priority = request.priority { patch.priority = try Reference.priority(priority) }
         if let project = request.project { patch.projectId = try await store.resolveProject(project).id }
-        if let epic = request.epic { patch.epicId = .set(try await resolveOptionalTicket(epic)) }
         if let parent = request.parent { patch.parentId = .set(try await resolveOptionalTicket(parent)) }
 
         let ticket = try await store.updateTicket(id: current.id, patch)

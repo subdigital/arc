@@ -27,18 +27,14 @@ final class TestClock: @unchecked Sendable {
 
 extension ArcStore {
     @discardableResult
-    func task(_ title: String, in project: Project, status: TicketStatus = .todo, epic: Ticket? = nil) async throws -> Ticket {
-        try await createTicket(NewTicket(title: title, kind: .task, projectId: project.id, epicId: epic?.id, status: status))
+    func task(_ title: String, in project: Project, status: TicketStatus = .todo, parent: Ticket? = nil) async throws -> Ticket {
+        try await createTicket(NewTicket(title: title, projectId: project.id, parentId: parent?.id, status: status))
     }
 
+    /// A child of `parent`, in the parent's project.
     @discardableResult
-    func epic(_ title: String, in project: Project) async throws -> Ticket {
-        try await createTicket(NewTicket(title: title, kind: .epic, projectId: project.id))
-    }
-
-    @discardableResult
-    func subtask(_ title: String, of parent: Ticket) async throws -> Ticket {
-        try await createTicket(NewTicket(title: title, kind: .subtask, parentId: parent.id))
+    func child(_ title: String, of parent: Ticket) async throws -> Ticket {
+        try await createTicket(NewTicket(title: title, parentId: parent.id))
     }
 
     func order(of status: TicketStatus) async throws -> [Int] {

@@ -108,8 +108,7 @@ public enum ArcTools {
 
     private static let statusNames = TicketStatus.allCases.map(\.rawValue)
     private static let priorityNames = TicketPriority.allCases.map(\.name)
-    private static let kindNames = TicketKind.allCases.map(\.rawValue)
-    private static let ticketHelp = "ticket identifier such as ARC-12 (case-insensitive; a bare number like 12 also works)"
+    private static let ticketHelp = "ticket identifier such as ARC-12 or FIC-123 (case-insensitive; a bare number like 12 means ARC-12)"
 
     // MARK: - Tools
 
@@ -148,11 +147,9 @@ public enum ArcTools {
             """,
         inputSchema: schema([
             "project": string("Only tickets in this project (name, case-insensitive)."),
-            "kind": stringOrList("Only these kinds.", values: kindNames),
             "status": stringOrList("Only these statuses. Spaces and hyphens are accepted in place of underscores.", values: statusNames),
             "priority": stringOrList("Only these priorities.", values: priorityNames),
-            "epic": string("Only tickets in this epic, \(ticketHelp)."),
-            "parent": string("Only subtasks of this task, \(ticketHelp)."),
+            "parent": string("Only direct children of this ticket, \(ticketHelp)."),
             "query": string("Case-insensitive text matched against title, description and identifier."),
             "include_closed": .object(["type": "boolean", "description": "Include done and canceled tickets. Default false."]),
             "limit": .object(["type": "integer", "minimum": 0, "description": "Return at most this many tickets."]),
@@ -164,7 +161,7 @@ public enum ArcTools {
 
     static let getTicket = ArcTool(
         name: "get_ticket",
-        description: "Get one ticket with its full description, project, epic, parent, subtasks and comments.",
+        description: "Get one ticket with its full description, project, parent, children and comments.",
         inputSchema: schema(["ticket": string("The \(ticketHelp).")], required: ["ticket"]),
         handler: { operations, data in
             try json(try await operations.getTicket(try decode(GetTicketArguments.self, from: data).ticket))
@@ -175,18 +172,14 @@ public enum ArcTools {
         name: "create_ticket",
         description: """
             Create a ticket and return it (including its new ARC-n identifier). \
-            Hierarchy: a project contains epics and tasks; a task may belong to one epic in the same project; \
-            a task may have subtasks (one level only). A project is required unless parent is given, because a subtask takes its parent's project. \
-            Passing parent without kind creates a subtask. Subtasks can only belong to tasks. \
-            Descriptions are GitHub Flavored Markdown.
+            Any ticket may have a parent ticket (to any depth, in any project). A project is required unless parent is given, \
+            in which case the new ticket defaults to the parent's project. Descriptions are GitHub Flavored Markdown.
             """,
         inputSchema: schema([
             "title": string("The title (required, not blank)."),
-            "project": string("Project name. Required unless parent is given."),
-            "kind": string("epic, task or subtask. Defaults to task, or subtask when parent is given.", enum: kindNames),
+            "project": string("Project name. Required unless parent is given (then it defaults to the parent's project)."),
             "description": string("Markdown description."),
-            "epic": string("For a task: the epic it belongs to, \(ticketHelp). Must be in the same project."),
-            "parent": string("For a subtask: its parent task, \(ticketHelp)."),
+            "parent": string("Make the new ticket a child of this ticket, \(ticketHelp)."),
             "status": string("Defaults to todo.", enum: statusNames),
             "priority": string("Defaults to none.", enum: priorityNames),
         ], required: ["title"]),
@@ -200,19 +193,17 @@ public enum ArcTools {
         description: """
             Change fields of a ticket and return it. Only the fields you pass change. \
             Typical use: set status to in_progress when you start, in_review or done when finished, canceled to drop work. \
-            There is no delete tool; cancel unwanted tickets instead. Pass epic or parent as "none" to clear them. \
-            Moving a task to another project moves its subtasks too.
+            There is no delete tool; cancel unwanted tickets instead. Pass parent as "none" to make a ticket top-level. \
+            Moving a ticket to another project does not move its children.
             """,
         inputSchema: schema([
             "ticket": string("The \(ticketHelp)."),
             "title": string("New title."),
             "description": string("New Markdown description (replaces the old one)."),
-            "kind": string("Change the kind.", enum: kindNames),
             "status": string("New status.", enum: statusNames),
             "priority": string("New priority.", enum: priorityNames),
             "project": string("Move to this project (name)."),
-            "epic": string("Epic \(ticketHelp), or \"none\" to clear."),
-            "parent": string("Parent task \(ticketHelp), or \"none\" to clear."),
+            "parent": string("Parent ticket \(ticketHelp), or \"none\" to clear."),
         ], required: ["ticket"]),
         handler: { operations, data in
             try json(try await operations.updateTicket(try decode(UpdateTicketRequest.self, from: data)))

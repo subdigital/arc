@@ -5,13 +5,13 @@ import Foundation
 enum Scope: Hashable, Sendable {
     case allTasks
     case project(String)
-    case epic(String)
+    case children(String)
 
     var storageKey: String {
         switch self {
         case .allTasks: "all"
         case .project(let id): "project:\(id)"
-        case .epic(let id): "epic:\(id)"
+        case .children(let id): "children:\(id)"
         }
     }
 }
@@ -27,7 +27,7 @@ struct ViewSettings: Codable, Equatable, Sendable {
     var layout: TicketLayout = .list
     /// All Tasks only: restrict to these projects (empty = every active project).
     var projectFilter: Set<String> = []
-    var epicFilter: String?
+    var parentFilter: String?
     var priorityFilter: Set<Int> = []
     var showSubtasks = true
     /// Board only: whether the Canceled column is shown.
@@ -36,7 +36,7 @@ struct ViewSettings: Codable, Equatable, Sendable {
     var collapsedStatuses: Set<TicketStatus> = [.done, .canceled]
 
     var hasActiveFilters: Bool {
-        !projectFilter.isEmpty || epicFilter != nil || !priorityFilter.isEmpty || !showSubtasks
+        !projectFilter.isEmpty || parentFilter != nil || !priorityFilter.isEmpty || !showSubtasks
     }
 }
 

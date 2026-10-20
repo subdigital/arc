@@ -77,49 +77,45 @@ public struct CommentDTO: Codable, Sendable, Equatable {
     }
 }
 
-public struct SubtaskProgressDTO: Codable, Sendable, Equatable {
+public struct ChildProgressDTO: Codable, Sendable, Equatable {
     public var done: Int
     public var total: Int
 }
 
-/// One shape for every ticket-returning command. `epic`, `parent` and `completedAt` are always
-/// present (null when unset). List results leave out `description`, `subtasks` and `comments`
+/// One shape for every ticket-returning command. `parent` and `completedAt` are always
+/// present (null when unset). List results leave out `description`, `children` and `comments`
 /// entirely; `show` and writes include them.
 public struct TicketDTO: Codable, Sendable, Equatable {
     public var identifier: String
-    public var kind: String
     public var title: String
     public var description: String?
     public var status: String
     public var priority: String
     public var project: ProjectRefDTO
-    public var epic: TicketRefDTO?
     public var parent: TicketRefDTO?
-    public var subtaskProgress: SubtaskProgressDTO?
-    public var subtasks: [TicketRefDTO]?
+    public var childProgress: ChildProgressDTO?
+    public var children: [TicketRefDTO]?
     public var comments: [CommentDTO]?
     public var createdAt: Date
     public var updatedAt: Date
     public var completedAt: Date?
 
     enum CodingKeys: String, CodingKey {
-        case identifier, kind, title, description, status, priority, project, epic, parent
-        case subtaskProgress, subtasks, comments, createdAt, updatedAt, completedAt
+        case identifier, title, description, status, priority, project, parent
+        case childProgress, children, comments, createdAt, updatedAt, completedAt
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(identifier, forKey: .identifier)
-        try container.encode(kind, forKey: .kind)
         try container.encode(title, forKey: .title)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encode(status, forKey: .status)
         try container.encode(priority, forKey: .priority)
         try container.encode(project, forKey: .project)
-        try container.encode(epic, forKey: .epic)
         try container.encode(parent, forKey: .parent)
-        try container.encodeIfPresent(subtaskProgress, forKey: .subtaskProgress)
-        try container.encodeIfPresent(subtasks, forKey: .subtasks)
+        try container.encodeIfPresent(childProgress, forKey: .childProgress)
+        try container.encodeIfPresent(children, forKey: .children)
         try container.encodeIfPresent(comments, forKey: .comments)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
@@ -129,18 +125,16 @@ public struct TicketDTO: Codable, Sendable, Equatable {
     public init(_ summary: TicketSummary, projectId: String) {
         let ticket = summary.ticket
         identifier = ticket.identifier
-        kind = ticket.kind.rawValue
         title = ticket.title
         description = nil
         status = ticket.status.rawValue
         priority = ticket.priority.name
         project = ProjectRefDTO(id: projectId, name: summary.projectName)
-        epic = summary.epic.map(TicketRefDTO.init)
         parent = summary.parent.map(TicketRefDTO.init)
-        subtaskProgress = summary.subtaskCount > 0
-            ? SubtaskProgressDTO(done: summary.subtasksDone, total: summary.subtaskCount)
+        childProgress = summary.childCount > 0
+            ? ChildProgressDTO(done: summary.childrenDone, total: summary.childCount)
             : nil
-        subtasks = nil
+        children = nil
         comments = nil
         createdAt = ticket.createdAt
         updatedAt = ticket.updatedAt
@@ -150,16 +144,14 @@ public struct TicketDTO: Codable, Sendable, Equatable {
     public init(_ detail: TicketDetail) {
         let ticket = detail.ticket
         identifier = ticket.identifier
-        kind = ticket.kind.rawValue
         title = ticket.title
         description = ticket.description
         status = ticket.status.rawValue
         priority = ticket.priority.name
         project = ProjectRefDTO(id: detail.project.id, name: detail.project.name)
-        epic = detail.epic.map(TicketRefDTO.init)
         parent = detail.parent.map(TicketRefDTO.init)
-        subtaskProgress = nil
-        subtasks = detail.subtasks.map(TicketRefDTO.init)
+        childProgress = nil
+        children = detail.children.map(TicketRefDTO.init)
         comments = detail.comments.map(CommentDTO.init)
         createdAt = ticket.createdAt
         updatedAt = ticket.updatedAt
@@ -167,7 +159,7 @@ public struct TicketDTO: Codable, Sendable, Equatable {
     }
 }
 
-public struct EpicProgressDTO: Codable, Sendable, Equatable {
+public struct ParentProgressDTO: Codable, Sendable, Equatable {
     public var identifier: String
     public var title: String
     public var status: String
@@ -175,7 +167,7 @@ public struct EpicProgressDTO: Codable, Sendable, Equatable {
     public var done: Int
     public var total: Int
 
-    public init(_ progress: EpicProgress) {
+    public init(_ progress: ParentProgress) {
         identifier = progress.ticket.identifier
         title = progress.ticket.title
         status = progress.ticket.status.rawValue

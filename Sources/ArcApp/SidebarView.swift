@@ -12,8 +12,8 @@ struct SidebarView: View {
             Section {
                 Label("All Tasks", systemImage: "tray.full")
                     .tag(SidebarSelection.allTasks)
-                Label("Epics", systemImage: "square.stack.3d.up")
-                    .tag(SidebarSelection.epics)
+                Label("Parents", systemImage: "square.stack.3d.up")
+                    .tag(SidebarSelection.parents)
             }
 
             Section {

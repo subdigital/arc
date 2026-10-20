@@ -10,9 +10,9 @@ public enum ArcMCPServer {
     public static let instructions = """
         Arc is a local issue tracker shared by the user and their coding agents.
 
-        Hierarchy: a project contains epics and tasks. A task may belong to one epic in the same project. \
-        A task may have subtasks (one level only). Every ticket has a permanent identifier like ARC-12 \
-        (one global counter across all projects and kinds).
+        Hierarchy: a project contains tickets, and any ticket may have a parent ticket (to any depth, even in \
+        another project), so a ticket with children plays the role of an epic or a task with subtasks. \
+        Every ticket has a permanent identifier like ARC-12; tickets imported from elsewhere keep their own key (FIC-123).
 
         Statuses: backlog, todo, in_progress, in_review, done, canceled. Priorities: none, urgent, high, medium, low.
 

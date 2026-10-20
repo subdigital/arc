@@ -7,11 +7,11 @@ import Testing
         let store: ArcStore
         let website: Project
         let api: Project
-        let epic: Ticket      // ARC-1 (website)
-        let linked: Ticket    // ARC-2 website, epic, in progress, high
+        let epic: Ticket      // ARC-1 (website), parent of ARC-2
+        let linked: Ticket    // ARC-2 website, child of ARC-1, in progress, high
         let plain: Ticket     // ARC-3 website, todo
         let done: Ticket      // ARC-4 website, done
-        let sub: Ticket       // ARC-5 subtask of linked
+        let sub: Ticket       // ARC-5 child of ARC-2
         let apiTask: Ticket   // ARC-6 api, todo, urgent
     }
 
@@ -19,13 +19,13 @@ import Testing
         let store = try makeStore()
         let website = try await store.createProject(name: "Website")
         let api = try await store.createProject(name: "API")
-        let epic = try await store.epic("Launch", in: website)
+        let epic = try await store.task("Launch", in: website)
         let linked = try await store.createTicket(NewTicket(
-            title: "Build footer", description: "uses OAuth", projectId: website.id, epicId: epic.id,
+            title: "Build footer", description: "uses OAuth", projectId: website.id, parentId: epic.id,
             status: .inProgress, priority: .high))
         let plain = try await store.task("Write copy", in: website)
         let done = try await store.task("Old thing", in: website, status: .done)
-        let sub = try await store.subtask("Footer links", of: linked)
+        let sub = try await store.child("Footer links", of: linked)
         let apiTask = try await store.createTicket(NewTicket(title: "Add OAuth", projectId: api.id, priority: .urgent))
         return Fixture(store: store, website: website, api: api, epic: epic, linked: linked, plain: plain, done: done, sub: sub, apiTask: apiTask)
     }
@@ -53,14 +53,13 @@ import Testing
         #expect(try await numbers(f, TicketQuery(statuses: [.done])) == [4])
     }
 
-    @Test func filterByKindPriorityEpicAndParent() async throws {
+    @Test func filterByPriorityAndParent() async throws {
         let f = try await fixture()
-        #expect(try await numbers(f, TicketQuery(kinds: [.epic])) == [1])
-        #expect(try await numbers(f, TicketQuery(kinds: [.subtask])) == [5])
         #expect(try await numbers(f, TicketQuery(priorities: [.urgent, .high])) == [6, 2])
-        // The epic filter includes the epic's tasks and those tasks' subtasks.
-        #expect(try await numbers(f, TicketQuery(epicId: f.epic.id)) == [5, 2])
+        // The parent filter returns direct children only.
+        #expect(try await numbers(f, TicketQuery(parentId: f.epic.id)) == [2])
         #expect(try await numbers(f, TicketQuery(parentId: f.linked.id)) == [5])
+        #expect(try await numbers(f, TicketQuery(topLevelOnly: true)) == [6, 3, 1])
     }
 
     @Test func textQueryMatchesTitleDescriptionAndIdentifier() async throws {
@@ -82,46 +81,45 @@ import Testing
         let rows = try await f.store.tickets(matching: TicketQuery(includeClosed: true))
         let linked = try #require(rows.first { $0.ticket.number == 2 })
         #expect(linked.projectName == "Website")
-        #expect(linked.epic?.identifier == "ARC-1")
-        #expect(linked.subtaskCount == 1 && linked.subtasksDone == 0)
+        #expect(linked.parent?.identifier == "ARC-1")
+        #expect(linked.childCount == 1 && linked.childrenDone == 0)
         let sub = try #require(rows.first { $0.ticket.number == 5 })
         #expect(sub.parent?.identifier == "ARC-2")
-        #expect(sub.epic?.identifier == "ARC-1", "a subtask shows its parent's epic")
     }
 
-    @Test func subtaskProgressCountsDone() async throws {
+    @Test func childProgressCountsDone() async throws {
         let f = try await fixture()
         try await f.store.updateTicket(id: f.sub.id, TicketPatch(status: .done))
         let row = try await f.store.ticketSummary(id: f.linked.id)
-        #expect(row.subtaskCount == 1 && row.subtasksDone == 1)
+        #expect(row.childCount == 1 && row.childrenDone == 1)
     }
 
-    @Test func epicProgressExcludesCanceled() async throws {
+    @Test func parentProgressExcludesCanceled() async throws {
         let store = try makeStore()
         let project = try await store.createProject(name: "A")
-        let epic = try await store.epic("Epic", in: project)
-        try await store.task("d1", in: project, status: .done, epic: epic)
-        try await store.task("d2", in: project, status: .done, epic: epic)
-        try await store.task("t", in: project, status: .todo, epic: epic)
-        try await store.task("c", in: project, status: .canceled, epic: epic)
-        let progress = try await store.epicsWithProgress()
+        let epic = try await store.task("Epic", in: project)
+        try await store.task("d1", in: project, status: .done, parent: epic)
+        try await store.task("d2", in: project, status: .done, parent: epic)
+        try await store.task("t", in: project, status: .todo, parent: epic)
+        try await store.task("c", in: project, status: .canceled, parent: epic)
+        let progress = try await store.parentsWithProgress()
         #expect(progress.count == 1)
         #expect(progress[0].done == 2)
         #expect(progress[0].total == 3)
         #expect(progress[0].projectName == "A")
-        let dto = EpicProgressDTO(progress[0])
+        let dto = ParentProgressDTO(progress[0])
         #expect(dto.done == 2 && dto.total == 3)
     }
 
-    @Test func detailDerivesEpicForSubtasks() async throws {
+    @Test func detailIncludesParentAndChildren() async throws {
         let f = try await fixture()
-        let detail = try await f.store.ticketDetail(reference: "arc-5")
-        #expect(detail.parent?.number == 2)
-        #expect(detail.epic?.number == 1)
+        let detail = try await f.store.ticketDetail(reference: "arc-2")
+        #expect(detail.parent?.number == 1)
+        #expect(detail.children.map(\.number) == [5])
         #expect(detail.project.name == "Website")
         let dto = TicketDTO(detail)
-        #expect(dto.parent?.identifier == "ARC-2")
-        #expect(dto.epic?.identifier == "ARC-1")
+        #expect(dto.parent?.identifier == "ARC-1")
+        #expect(dto.children?.map(\.identifier) == ["ARC-5"])
     }
 
     @Test func prioritySortRankOrder() {

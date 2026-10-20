@@ -2,8 +2,8 @@
 
 A lightweight native macOS issue tracker for one person and their coding agents.
 
-- **Projects** contain **epics** and **tasks**; a task may have **subtasks**.
-- Every ticket gets a permanent identifier (`ARC-1`, `ARC-2`, …) from one global counter.
+- **Projects** contain **tickets**; any ticket can have a **parent** (to any depth), so there are no separate epics, tasks or subtasks.
+- Every ticket gets a permanent identifier (`ARC-1`, `ARC-2`, …) from one global counter. Tickets imported from another tracker keep their own key (`FIC-123`).
 - One local SQLite database is shared by the app and the `arc` command-line tool, so what an agent does shows up in the app within a couple of seconds.
 - Agents work through the `arc` CLI, an MCP server (`arc mcp`) or an installable skill.
 
@@ -37,7 +37,7 @@ export ARC_DB_PATH=/tmp/arc-demo/arc.sqlite
 
 Install it from the app (Settings → Agents → Install Command Line Tool), or put `.build/debug/arc` / `Arc.app/Contents/Helpers/arc` on your `PATH`.
 
-Tickets are referred to as `ARC-12`, `arc-12` or just `12`; projects by name (any case). Statuses are `backlog`, `todo`, `in_progress`, `in_review`, `done`, `canceled` (`"In Progress"` and `in-progress` work too); priorities are `none`, `urgent`, `high`, `medium`, `low`.
+Tickets are referred to as `ARC-12`, `arc-12` or just `12` (imported tickets keep their own key, e.g. `FIC-123`); projects by name (any case). Statuses are `backlog`, `todo`, `in_progress`, `in_review`, `done`, `canceled` (`"In Progress"` and `in-progress` work too); priorities are `none`, `urgent`, `high`, `medium`, `low`.
 
 ```sh
 arc project create Website --description "Marketing site"
@@ -47,15 +47,14 @@ arc project archive Site
 arc project unarchive Site
 
 arc create --project Site --title "Fix footer" --priority high
-arc create --project Site --kind epic --title "Launch"
-arc create --project Site --title "Hero image" --epic ARC-2
-arc create --parent ARC-1 --title "Add tests"      # subtask: the project comes from the parent
+arc create --project Site --title "Launch"
+arc create --parent ARC-2 --title "Hero image"      # child of ARC-2; the project comes from the parent
 arc list --project Site                            # open tickets only
 arc list --project Site --status "In Progress"
 arc list --all --limit 20                          # include Done and Canceled
 arc show ARC-1
 arc update ARC-1 --status "In Progress"
-arc update ARC-1 --epic none
+arc update ARC-1 --parent none
 arc comment ARC-1 "Parser done, starting tests"    # recorded as written by an agent
 arc delete ARC-4 --yes
 ```

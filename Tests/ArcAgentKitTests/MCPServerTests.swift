@@ -98,7 +98,7 @@ final class MCPSession: @unchecked Sendable {
         let serverInfo = try #require(result["serverInfo"] as? [String: Any])
         #expect(serverInfo["name"] as? String == "arc")
         let instructions = try #require(result["instructions"] as? String)
-        #expect(instructions.contains("project contains epics and tasks"))
+        #expect(instructions.contains("any ticket may have a parent ticket"))
         #expect(instructions.contains("in_progress"))
         #expect(((result["capabilities"] as? [String: Any])?["tools"]) != nil)
 
@@ -128,10 +128,11 @@ final class MCPSession: @unchecked Sendable {
         defer { session.close() }
         _ = try session.initialize()
         _ = try session.callTool("create_project", ["name": "API"])
-        _ = try session.callTool("create_ticket", ["title": "Epic", "project": "API", "kind": "epic"])
-        let failure = try session.callTool("create_ticket", ["title": "Sub", "kind": "subtask", "parent": "ARC-1"])
+        _ = try session.callTool("create_ticket", ["title": "Top", "project": "API"])
+        _ = try session.callTool("create_ticket", ["title": "Child", "parent": "ARC-1"])
+        let failure = try session.callTool("update_ticket", ["ticket": "ARC-1", "parent": "ARC-2"])
         #expect(failure.isError)
-        #expect(failure.text.contains("Subtasks can only belong to tasks"))
+        #expect(failure.text.contains("descendant"))
     }
 
     @Test func stdoutCarriesOnlyProtocolMessages() throws {

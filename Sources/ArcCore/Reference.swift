@@ -2,22 +2,43 @@ import Foundation
 
 /// Lenient parsing of the human-style references accepted by the CLI, MCP tools and app:
 /// ticket identifiers, statuses, priorities and kinds.
+/// A ticket's key: the prefix and number that make up an identifier such as `ARC-12`.
+public struct TicketKey: Hashable, Sendable {
+    public var prefix: String
+    public var number: Int
+
+    public var identifier: String { "\(prefix)-\(number)" }
+}
+
 public enum Reference {
     public static let identifierPrefix = "ARC"
 
     public static func identifier(for number: Int) -> String { "\(identifierPrefix)-\(number)" }
 
-    /// `ARC-12`, `arc-12`, `12` (surrounding whitespace ignored) → 12.
-    public static func ticketNumber(_ reference: String) throws -> Int {
+    /// `ARC-12`, `fic-7`, `12` (a bare number means `ARC-12`); surrounding whitespace is ignored.
+    public static func ticketKey(_ reference: String) throws -> TicketKey {
         let trimmed = reference.trimmingCharacters(in: .whitespacesAndNewlines)
-        var digits = Substring(trimmed)
-        if trimmed.range(of: "^arc-", options: [.regularExpression, .caseInsensitive]) != nil {
-            digits = digits.dropFirst(4)
+        let parts = trimmed.split(separator: "-", maxSplits: 1, omittingEmptySubsequences: false)
+        let prefix: String
+        let digits: Substring
+        if parts.count == 2 {
+            prefix = parts[0].uppercased()
+            digits = parts[1]
+            guard let first = prefix.first, first.isLetter, prefix.allSatisfy({ $0.isASCII && ($0.isLetter || $0.isNumber) }) else {
+                throw invalidReference(reference)
+            }
+        } else {
+            prefix = identifierPrefix
+            digits = Substring(trimmed)
         }
         guard !digits.isEmpty, digits.allSatisfy(\.isASCIIDigit), let number = Int(digits), number > 0 else {
-            throw ArcError.invalidArgument("'\(reference)' is not a ticket reference. Use an identifier like ARC-12 or a bare number.")
+            throw invalidReference(reference)
         }
-        return number
+        return TicketKey(prefix: prefix, number: number)
+    }
+
+    private static func invalidReference(_ reference: String) -> ArcError {
+        ArcError.invalidArgument("'\(reference)' is not a ticket reference. Use an identifier like ARC-12 (or FIC-7 for imported tickets), or a bare number for ARC tickets.")
     }
 
     /// `In Progress`, `in-progress`, `in_progress` → `.inProgress`.
@@ -35,14 +56,6 @@ public enum Reference {
         if let match = TicketPriority.allCases.first(where: { $0.name == key }) { return match }
         throw ArcError.invalidArgument(
             "Unknown priority '\(reference)'. Valid priorities: \(TicketPriority.allCases.map(\.name).joined(separator: ", "))."
-        )
-    }
-
-    public static func kind(_ reference: String) throws -> TicketKind {
-        let key = normalize(reference)
-        if let kind = TicketKind(rawValue: key) { return kind }
-        throw ArcError.invalidArgument(
-            "Unknown kind '\(reference)'. Valid kinds: \(TicketKind.allCases.map(\.rawValue).joined(separator: ", "))."
         )
     }
 

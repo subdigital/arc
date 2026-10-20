@@ -16,21 +16,21 @@ import Testing
         let app = try model()
         #expect(!app.canGoBack && !app.canGoForward)
 
-        app.selection = .epics
+        app.selection = .parents
         app.open(ticket: "t1")
         app.open(ticket: "t2")
         #expect(app.canGoBack)
 
         app.navigateBack()
-        #expect(app.path == [.ticket("t1")] && app.selection == .epics)
+        #expect(app.path == [.ticket("t1")] && app.selection == .parents)
         app.navigateBack()
-        #expect(app.path.isEmpty && app.selection == .epics)
+        #expect(app.path.isEmpty && app.selection == .parents)
         app.navigateBack()
         #expect(app.selection == .allTasks)
         #expect(!app.canGoBack && app.canGoForward)
 
         app.navigateForward()
-        #expect(app.selection == .epics && app.path.isEmpty)
+        #expect(app.selection == .parents && app.path.isEmpty)
         app.navigateForward()
         app.navigateForward()
         #expect(app.path == [.ticket("t1"), .ticket("t2")])
@@ -82,7 +82,7 @@ import Testing
     @Test func changingSidebarSelectionClearsTicks() throws {
         let app = try model()
         app.toggleChecked("x")
-        app.selection = .epics
+        app.selection = .parents
         #expect(app.checkedTicketIDs.isEmpty)
     }
 
@@ -112,17 +112,52 @@ import Testing
         #expect(app.contextTargets(for: "a") == ["a"])
     }
 
-    @Test func bulkMoveReportsSubtasksThatCannotMove() async throws {
+    @Test func bulkMoveChangesEveryTicketsProject() async throws {
         let app = try model()
         let a = try await app.store.createProject(name: "A")
         let b = try await app.store.createProject(name: "B")
         let task = try await app.store.createTicket(NewTicket(title: "task", projectId: a.id))
-        let sub = try await app.store.createTicket(NewTicket(title: "sub", kind: .subtask, parentId: task.id))
+        let sub = try await app.store.createTicket(NewTicket(title: "sub", parentId: task.id))
 
         await app.bulkUpdate([sub.id, task.id], TicketPatch(projectId: b.id), done: "Moved")
         #expect(try await app.store.ticket(id: task.id).projectId == b.id)
-        #expect(app.toast?.message == "Moved 1 ticket")
-        #expect(app.error != nil, "the subtask failure must be surfaced")
+        #expect(try await app.store.ticket(id: sub.id).projectId == b.id)
+        #expect(app.toast?.message == "Moved 2 tickets")
+        #expect(app.error == nil)
+    }
+
+    @Test func settingAParentAppliesToEveryTicketAndReportsCycles() async throws {
+        let app = try model()
+        let project = try await app.store.createProject(name: "A")
+        let parent = try await app.store.createTicket(NewTicket(title: "parent", projectId: project.id))
+        let one = try await app.store.createTicket(NewTicket(title: "one", projectId: project.id))
+        let two = try await app.store.createTicket(NewTicket(title: "two", projectId: project.id))
+
+        await app.setParent(parent.id, for: [one.id, two.id])
+        #expect(try await app.store.ticket(id: one.id).parentId == parent.id)
+        #expect(try await app.store.ticket(id: two.id).parentId == parent.id)
+
+        // The parent cannot move under its own child.
+        await app.setParent(one.id, for: [parent.id])
+        #expect(app.error != nil)
+        #expect(try await app.store.ticket(id: parent.id).parentId == nil)
+
+        await app.setParent(nil, for: [one.id])
+        #expect(try await app.store.ticket(id: one.id).parentId == nil)
+    }
+
+    @Test func savedNavigationRestoresOnLaunch() throws {
+        let defaults = UserDefaults(suiteName: "arc-nav-\(UUID().uuidString)")!
+        let first = try model()
+        first.persistNavigation(in: defaults)
+        first.selection = .project("p1")
+        first.open(ticket: "t1")
+        first.open(ticket: "t2")
+
+        let second = try model()
+        second.persistNavigation(in: defaults)
+        #expect(second.selection == .project("p1"))
+        #expect(second.path == [.ticket("t1"), .ticket("t2")])
     }
 
     @Test func bulkDeleteRemovesTicketsAndClearsTicks() async throws {
@@ -135,7 +170,7 @@ import Testing
 
         await app.bulkDelete([one.id, two.id])
         #expect(app.checkedTicketIDs.isEmpty)
-        #expect(try await app.store.ticketNumbers().isEmpty)
+        #expect(try await app.store.ticketIdentifiers().isEmpty)
         #expect(app.toast?.message == "Deleted 2 tickets")
     }
 

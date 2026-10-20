@@ -5,25 +5,28 @@ public enum MarkdownLinker {
     public static let ticketScheme = "arc"
     public static let ticketHost = "ticket"
 
-    public static func ticketURL(number: Int) -> URL {
-        URL(string: "\(ticketScheme)://\(ticketHost)/\(number)")!
+    /// `identifier` is a ticket key such as `ARC-12` or `FIC-7`.
+    public static func ticketURL(identifier: String) -> URL {
+        URL(string: "\(ticketScheme)://\(ticketHost)/\(identifier.uppercased())")!
     }
 
-    /// The ticket number in an `arc://ticket/<n>` URL.
-    public static func ticketNumber(from url: URL) -> Int? {
+    /// The identifier in an `arc://ticket/<identifier>` URL (a bare number from older links means `ARC-n`).
+    public static func ticketIdentifier(from url: URL) -> String? {
         guard url.scheme == ticketScheme, url.host == ticketHost else { return nil }
-        return Int(url.lastPathComponent)
+        let last = url.lastPathComponent.uppercased()
+        if Int(last) != nil { return "ARC-\(last)" }
+        return last.contains("-") ? last : nil
     }
 
-    private static let ticketPattern = try! NSRegularExpression(pattern: #"\bARC-(\d+)\b"#, options: [.caseInsensitive])
+    private static let ticketPattern = try! NSRegularExpression(pattern: #"\b([A-Za-z][A-Za-z0-9]{1,9})-(\d+)\b"#)
     private static let urlPattern = try! NSRegularExpression(pattern: #"https?://[^\s<>]+"#, options: [.caseInsensitive])
 
-    /// Links `ARC-n` for the numbers in `knownTickets` (others stay plain) and, when `detectURLs`, bare http(s) URLs.
-    public static func link(_ blocks: [MarkdownBlock], knownTickets: Set<Int>, detectURLs: Bool = true) -> [MarkdownBlock] {
+    /// Links identifiers such as `ARC-n` that are in `knownTickets` (uppercased; others stay plain) and, when `detectURLs`, bare http(s) URLs.
+    public static func link(_ blocks: [MarkdownBlock], knownTickets: Set<String>, detectURLs: Bool = true) -> [MarkdownBlock] {
         blocks.map { link($0, knownTickets, detectURLs) }
     }
 
-    public static func link(_ text: AttributedString, knownTickets: Set<Int>, detectURLs: Bool = true) -> AttributedString {
+    public static func link(_ text: AttributedString, knownTickets: Set<String>, detectURLs: Bool = true) -> AttributedString {
         var result = text
         // Runs are collected first because mutating while iterating would invalidate them.
         for run in Array(text.runs) {
@@ -38,12 +41,11 @@ public enum MarkdownLinker {
                 }
             }
             for match in ticketPattern.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)) {
-                guard match.range(at: 1).location != NSNotFound,
-                      let number = Int((plain as NSString).substring(with: match.range(at: 1))),
-                      knownTickets.contains(number),
+                let identifier = (plain as NSString).substring(with: match.range).uppercased()
+                guard knownTickets.contains(identifier),
                       !matches.contains(where: { NSIntersectionRange($0.range, match.range).length > 0 })
                 else { continue }
-                matches.append((match.range, ticketURL(number: number)))
+                matches.append((match.range, ticketURL(identifier: identifier)))
             }
 
             for (nsRange, url) in matches {
@@ -76,7 +78,7 @@ public enum MarkdownLinker {
         return NSRange(location: range.location, length: length)
     }
 
-    private static func link(_ block: MarkdownBlock, _ known: Set<Int>, _ detectURLs: Bool) -> MarkdownBlock {
+    private static func link(_ block: MarkdownBlock, _ known: Set<String>, _ detectURLs: Bool) -> MarkdownBlock {
         switch block {
         case .heading(let level, let text):
             return .heading(level: level, text: link(text, knownTickets: known, detectURLs: detectURLs))

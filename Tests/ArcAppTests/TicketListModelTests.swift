@@ -11,13 +11,12 @@ import Testing
 
     // MARK: Query construction
 
-    @Test func allTasksListsTasksAndSubtasksAcrossActiveProjects() {
+    @Test func allTasksListsEveryTicketAcrossActiveProjects() {
         let query = TicketListModel.query(for: .allTasks, settings: ViewSettings())
-        #expect(query.kinds == [.task, .subtask])
         #expect(query.projectIds.isEmpty)
         #expect(query.includeClosed)
         #expect(!query.includeArchivedProjects)
-        #expect(query.epicId == nil)
+        #expect(query.parentId == nil && !query.topLevelOnly)
         #expect(query.priorities.isEmpty)
     }
 
@@ -28,32 +27,28 @@ import Testing
         #expect(TicketListModel.query(for: .project("p"), settings: settings).projectIds == ["p"])
     }
 
-    @Test func projectScopeIncludesEveryKind() {
-        let query = TicketListModel.query(for: .project("p"), settings: ViewSettings())
-        #expect(query.kinds.isEmpty)
-    }
-
-    @Test func hidingSubtasksRemovesTheSubtaskKind() {
+    @Test func hidingSubTicketsKeepsTopLevelOnly() {
         var settings = ViewSettings()
         settings.showSubtasks = false
-        #expect(TicketListModel.query(for: .allTasks, settings: settings).kinds == [.task])
-        #expect(TicketListModel.query(for: .project("p"), settings: settings).kinds == [.epic, .task])
+        #expect(TicketListModel.query(for: .allTasks, settings: settings).topLevelOnly)
+        #expect(TicketListModel.query(for: .project("p"), settings: settings).topLevelOnly)
+        #expect(!TicketListModel.query(for: .children("t"), settings: settings).topLevelOnly)
     }
 
-    @Test func epicAndPriorityFilters() {
+    @Test func parentAndPriorityFilters() {
         var settings = ViewSettings()
-        settings.epicFilter = "epic-1"
+        settings.parentFilter = "parent-1"
         settings.priorityFilter = [TicketPriority.high.rawValue, TicketPriority.urgent.rawValue]
         let query = TicketListModel.query(for: .project("p"), settings: settings)
-        #expect(query.epicId == "epic-1")
+        #expect(query.parentId == "parent-1")
         #expect(query.priorities == [.high, .urgent])
     }
 
-    @Test func epicScopeUsesTheEpicAndIgnoresTheEpicFilter() {
+    @Test func childrenScopeUsesTheParentAndIgnoresTheParentFilter() {
         var settings = ViewSettings()
-        settings.epicFilter = "other"
-        let query = TicketListModel.query(for: .epic("e"), settings: settings)
-        #expect(query.epicId == "e")
+        settings.parentFilter = "other"
+        let query = TicketListModel.query(for: .children("e"), settings: settings)
+        #expect(query.parentId == "e")
         #expect(query.projectIds.isEmpty)
     }
 
@@ -69,7 +64,7 @@ import Testing
         website.showSubtasks = false
         website.showCanceled = true
         website.collapsedStatuses = [.backlog]
-        website.epicFilter = "e1"
+        website.parentFilter = "e1"
         store.save(website, for: .project("website"))
 
         var all = ViewSettings()
@@ -125,11 +120,11 @@ import Testing
         #expect(groups.map(\.count) == [1, 2])
     }
 
-    @Test func subtasksNestUnderTheirParentOnlyInTheSameGroup() async throws {
+    @Test func childrenNestUnderTheirParentOnlyInTheSameGroup() async throws {
         let (model, store, project) = try await seeded()
         let parent = try await store.createTicket(NewTicket(title: "parent", projectId: project.id))
-        let sameGroup = try await store.createTicket(NewTicket(title: "child todo", kind: .subtask, parentId: parent.id))
-        let otherGroup = try await store.createTicket(NewTicket(title: "child done", kind: .subtask, parentId: parent.id, status: .done))
+        let sameGroup = try await store.createTicket(NewTicket(title: "child todo", parentId: parent.id))
+        let otherGroup = try await store.createTicket(NewTicket(title: "child done", parentId: parent.id, status: .done))
         await model.reload()
 
         let todo = try #require(model.listGroups.first { $0.status == .todo })
@@ -138,6 +133,17 @@ import Testing
         let done = try #require(model.listGroups.first { $0.status == .done })
         #expect(done.rows.map(\.id) == [otherGroup.id])
         #expect(done.rows[0].isNested == false)
+    }
+
+    @Test func nestingFollowsGrandchildren() async throws {
+        let (model, store, project) = try await seeded()
+        let parent = try await store.createTicket(NewTicket(title: "parent", projectId: project.id))
+        let child = try await store.createTicket(NewTicket(title: "child", parentId: parent.id))
+        let grandchild = try await store.createTicket(NewTicket(title: "grandchild", parentId: child.id))
+        await model.reload()
+        let todo = try #require(model.listGroups.first { $0.status == .todo })
+        #expect(todo.rows.map(\.id) == [parent.id, child.id, grandchild.id])
+        #expect(todo.rows.map(\.depth) == [0, 1, 2])
     }
 
     @Test func boardHasWorkflowColumnsAndHidesCanceledByDefault() async throws {
@@ -150,16 +156,16 @@ import Testing
         #expect(model.boardColumns.last?.cards.count == 1)
     }
 
-    @Test func hidingSubtasksKeepsParentProgressCounts() async throws {
+    @Test func hidingSubTicketsKeepsParentProgressCounts() async throws {
         let (model, store, project) = try await seeded()
         let parent = try await store.createTicket(NewTicket(title: "parent", projectId: project.id))
-        try await store.createTicket(NewTicket(title: "child", kind: .subtask, parentId: parent.id, status: .done))
+        try await store.createTicket(NewTicket(title: "child", parentId: parent.id, status: .done))
         model.settings.showSubtasks = false
         await model.reload()
 
         #expect(model.tickets.count == 1)
-        #expect(model.tickets[0].subtaskCount == 1)
-        #expect(model.tickets[0].subtasksDone == 1)
+        #expect(model.tickets[0].childCount == 1)
+        #expect(model.tickets[0].childrenDone == 1)
     }
 
     @Test func collapsingAGroupHidesItsRowsFromKeyboardNavigation() async throws {
@@ -197,23 +203,23 @@ import Testing
         #expect(model.boardNeighbor(of: doing.id, columnOffset: 1) == doing.id, "nothing to the right: stay put")
     }
 
-    @Test func epicDrillDownListsTheEpicsTasks() async throws {
+    @Test func drillDownListsTheTicketsChildren() async throws {
         let (_, store, project) = try await seeded()
-        let epic = try await store.createTicket(NewTicket(title: "Epic", kind: .epic, projectId: project.id))
-        try await store.createTicket(NewTicket(title: "in epic", projectId: project.id, epicId: epic.id))
+        let epic = try await store.createTicket(NewTicket(title: "Epic", projectId: project.id))
+        try await store.createTicket(NewTicket(title: "in epic", projectId: project.id, parentId: epic.id))
         try await store.createTicket(NewTicket(title: "outside", projectId: project.id))
-        let model = TicketListModel(scope: .epic(epic.id), store: store, settingsStore: ViewSettingsStore(defaults: defaults()))
+        let model = TicketListModel(scope: .children(epic.id), store: store, settingsStore: ViewSettingsStore(defaults: defaults()))
         await model.reload()
         #expect(model.tickets.map(\.ticket.title) == ["in epic"])
     }
 
-    @Test func epicWithTwoDoneOneTodoOneCanceledShowsTwoOfThree() async throws {
+    @Test func parentWithTwoDoneOneTodoOneCanceledShowsTwoOfThree() async throws {
         let (_, store, project) = try await seeded()
-        let epic = try await store.createTicket(NewTicket(title: "Epic", kind: .epic, projectId: project.id))
+        let epic = try await store.createTicket(NewTicket(title: "Epic", projectId: project.id))
         for status in [TicketStatus.done, .done, .todo, .canceled] {
-            try await store.createTicket(NewTicket(title: "t", projectId: project.id, epicId: epic.id, status: status))
+            try await store.createTicket(NewTicket(title: "t", projectId: project.id, parentId: epic.id, status: status))
         }
-        let progress = try await store.epicsWithProgress()
+        let progress = try await store.parentsWithProgress()
         #expect(progress.first.map { "\($0.done)/\($0.total)" } == "2/3")
     }
 }

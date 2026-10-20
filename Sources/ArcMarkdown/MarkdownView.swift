@@ -15,19 +15,19 @@ extension ImageLoader {
 /// environment (the app routes `arc://ticket/<n>` to the ticket and everything else to the browser).
 public struct MarkdownView: View {
     private let source: String
-    private let knownTickets: Set<Int>
+    private let knownTickets: Set<String>
     private let style: MarkdownStyle
     private let highlighter: any CodeHighlighter
     private let imageLoader: ImageLoader
     private let onSourceChange: ((String) -> Void)?
 
     /// - Parameters:
-    ///   - knownTickets: Numbers of existing tickets; only `ARC-n` references to these become links.
+    ///   - knownTickets: Identifiers (uppercased, e.g. `ARC-12`) of existing tickets; only references to these become links.
     ///   - onSourceChange: Called with the updated source when a task-list checkbox is clicked.
     ///     When nil, checkboxes are read-only.
     public init(
         _ source: String,
-        knownTickets: Set<Int> = [],
+        knownTickets: Set<String> = [],
         style: MarkdownStyle = MarkdownStyle(),
         highlighter: any CodeHighlighter = HighlightSwiftHighlighter.shared,
         imageLoader: ImageLoader = .shared,

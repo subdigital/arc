@@ -3,28 +3,18 @@ import Testing
 @testable import ArcCore
 
 @Suite struct DeletionAndCommentTests {
-    @Test func deletingTaskDeletesSubtasks() async throws {
+    @Test func deletingTicketDeletesItsCommentsAndKeepsChildren() async throws {
         let store = try makeStore()
         let project = try await store.createProject(name: "A")
-        let task = try await store.task("Task", in: project)
-        let s1 = try await store.subtask("s1", of: task)
-        let s2 = try await store.subtask("s2", of: task)
-        try await store.addComment(ticketId: s1.id, body: "note", author: .user)
-        try await store.deleteTicket(id: task.id)
-        for id in [task.id, s1.id, s2.id] {
-            await #expect(throws: ArcError.self) { try await store.ticket(id: id) }
-        }
+        let parent = try await store.task("Parent", in: project)
+        let child = try await store.child("Child", of: parent)
+        let grandchild = try await store.child("Grandchild", of: child)
+        try await store.addComment(ticketId: child.id, body: "note", author: .user)
+        try await store.deleteTicket(id: child.id)
+        await #expect(throws: ArcError.self) { try await store.ticket(id: child.id) }
+        #expect(try await store.ticket(id: grandchild.id).parentId == nil)
+        #expect(try await store.ticket(id: parent.id).parentId == nil)
         #expect(try await store.pool.read { try Int.fetchOne($0, sql: "SELECT COUNT(*) FROM comment") } == 0)
-    }
-
-    @Test func deletingEpicKeepsTasks() async throws {
-        let store = try makeStore()
-        let project = try await store.createProject(name: "A")
-        let epic = try await store.epic("Epic", in: project)
-        let task = try await store.task("Task", in: project, epic: epic)
-        try await store.deleteTicket(id: epic.id)
-        let kept = try await store.ticket(id: task.id)
-        #expect(kept.epicId == nil)
     }
 
     @Test func numbersAreNeverReused() async throws {

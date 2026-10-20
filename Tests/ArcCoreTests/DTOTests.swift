@@ -17,12 +17,12 @@ import Testing
         let clock = TestClock()
         let store = try makeStore(now: clock.callback)
         let project = try await store.createProject(name: "Website", color: "#5E6AD2")
-        let epic = try await store.epic("Launch", in: project)
+        let epic = try await store.task("Launch", in: project)
         let task = try await store.createTicket(NewTicket(
-            title: "Build footer", description: "Needs `links`", projectId: project.id, epicId: epic.id,
+            title: "Build footer", description: "Needs `links`", projectId: project.id, parentId: epic.id,
             status: .inProgress, priority: .high
         ))
-        try await store.subtask("Add tests", of: task)
+        try await store.child("Add tests", of: task)
         clock.advance()
         try await store.addComment(ticketId: task.id, body: "Started", author: .agent)
 
@@ -34,6 +34,13 @@ import Testing
 
         #expect(json == """
         {
+          "children" : [
+            {
+              "identifier" : "ARC-3",
+              "status" : "todo",
+              "title" : "Add tests"
+            }
+          ],
           "comments" : [
             {
               "author" : "agent",
@@ -45,27 +52,18 @@ import Testing
           "completedAt" : null,
           "createdAt" : "2027-01-15T08:00:00Z",
           "description" : "Needs `links`",
-          "epic" : {
+          "identifier" : "ARC-2",
+          "parent" : {
             "identifier" : "ARC-1",
             "status" : "todo",
             "title" : "Launch"
           },
-          "identifier" : "ARC-2",
-          "kind" : "task",
-          "parent" : null,
           "priority" : "high",
           "project" : {
             "id" : "project-id",
             "name" : "Website"
           },
           "status" : "in_progress",
-          "subtasks" : [
-            {
-              "identifier" : "ARC-3",
-              "status" : "todo",
-              "title" : "Add tests"
-            }
-          ],
           "title" : "Build footer",
           "updatedAt" : "2027-01-15T08:00:00Z"
         }

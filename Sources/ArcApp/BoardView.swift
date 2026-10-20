@@ -102,14 +102,6 @@ struct BoardCardView: View {
                 Text(ticket.identifier)
                     .font(Theme.metaFont.monospacedDigit())
                     .foregroundStyle(Theme.textSecondary)
-                if ticket.kind != .task {
-                    Text(ticket.kind.displayName)
-                        .font(.system(size: 10))
-                        .foregroundStyle(Theme.textSecondary)
-                        .padding(.horizontal, 5)
-                        .frame(height: 16)
-                        .background(Theme.bgSelected, in: Capsule())
-                }
                 Spacer()
                 PriorityGlyph(priority: ticket.priority)
             }
@@ -119,10 +111,10 @@ struct BoardCardView: View {
                 .lineLimit(3)
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            if summary.epic != nil || summary.subtaskCount > 0 || showProject {
+            if summary.parent != nil || summary.childCount > 0 || showProject {
                 HStack(spacing: 6) {
-                    if let epic = summary.epic, ticket.kind != .epic {
-                        Text(epic.title)
+                    if let parent = summary.parent {
+                        Text(parent.title)
                             .font(Theme.metaFont)
                             .foregroundStyle(Theme.textSecondary)
                             .lineLimit(1)
@@ -130,10 +122,10 @@ struct BoardCardView: View {
                             .frame(height: 18)
                             .background(Theme.bgSelected, in: RoundedRectangle(cornerRadius: 4))
                     }
-                    if summary.subtaskCount > 0 {
+                    if summary.childCount > 0 {
                         HStack(spacing: 3) {
                             Image(systemName: "checklist").font(.system(size: 10))
-                            Text("\(summary.subtasksDone)/\(summary.subtaskCount)").font(Theme.metaFont.monospacedDigit())
+                            Text("\(summary.childrenDone)/\(summary.childCount)").font(Theme.metaFont.monospacedDigit())
                         }
                         .foregroundStyle(Theme.textSecondary)
                     }
