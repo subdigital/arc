@@ -64,7 +64,44 @@ final class AppModel {
     private(set) var canGoBack = false
     private(set) var canGoForward = false
 
+    /// When set, the current place is saved here so a relaunch (e.g. the dev watch script) lands on the same screen.
+    @ObservationIgnored var navigationDefaults: UserDefaults?
+
+    /// Restores the saved place, then keeps saving it; call once at launch.
+    func persistNavigation(in defaults: UserDefaults = .standard) {
+        if let saved = defaults.string(forKey: "navigation.selection") {
+            switch saved {
+            case "all": selection = .allTasks
+            case "epics": selection = .epics
+            default: if saved.hasPrefix("project:") { selection = .project(String(saved.dropFirst(8))) }
+            }
+            path = (defaults.stringArray(forKey: "navigation.path") ?? []).compactMap { entry in
+                if entry.hasPrefix("ticket:") { return .ticket(String(entry.dropFirst(7))) }
+                if entry.hasPrefix("epic:") { return .epic(String(entry.dropFirst(5))) }
+                return nil
+            }
+        }
+        navigationDefaults = defaults
+    }
+
+    private func saveNavigation() {
+        guard let defaults = navigationDefaults else { return }
+        let saved: String = switch selection {
+        case .allTasks: "all"
+        case .epics: "epics"
+        case .project(let id): "project:\(id)"
+        }
+        defaults.set(saved, forKey: "navigation.selection")
+        defaults.set(path.map { route in
+            switch route {
+            case .ticket(let id): "ticket:\(id)"
+            case .epic(let id): "epic:\(id)"
+            }
+        }, forKey: "navigation.path")
+    }
+
     private func recordNavigation() {
+        saveNavigation()
         guard !isRestoringHistory else { return }
         let state = NavigationState(selection: selection, path: path)
         guard state != history[historyIndex] else { return }

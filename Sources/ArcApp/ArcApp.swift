@@ -27,6 +27,7 @@ struct ArcApp: App {
     init() {
         do {
             let model = AppModel(store: try ArcStore())
+            model.persistNavigation()
             model.start()
             _model = State(initialValue: model)
         } catch {

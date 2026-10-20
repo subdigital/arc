@@ -21,6 +21,8 @@ scripts/bundle.sh      # assemble build/Arc.app
 open build/Arc.app
 ```
 
+For development, `scripts/dev.sh` watches `Sources/`, rebuilds on each change and relaunches the debug app. The app remembers the screen you were on, so a change is a short blink. If a build fails, the running app stays up and the errors are printed.
+
 The app is signed ad hoc for local use. If you copy it to another Mac, Gatekeeper will ask for confirmation the first time.
 
 ## Data location
