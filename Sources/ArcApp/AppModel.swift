@@ -119,6 +119,7 @@ final class AppModel {
     var showingShortcuts = false
     private(set) var toast: Toast?
     @ObservationIgnored private var keyMonitor: Any?
+    @ObservationIgnored private var mouseMonitor: Any?
     @ObservationIgnored private var toastTask: Task<Void, Never>?
 
     /// Bumped to ask the visible ticket list to toggle between list and board.
@@ -143,6 +144,21 @@ final class AppModel {
             nonisolated(unsafe) let event = event // delivered on the main thread
             let consumed = MainActor.assumeIsolated { self?.handle(event) ?? false }
             return consumed ? nil : event
+        }
+        mouseMonitor = NSEvent.addLocalMonitorForEvents(matching: .otherMouseDown) { [weak self] event in
+            nonisolated(unsafe) let event = event
+            let consumed = MainActor.assumeIsolated { self?.handleMouse(event) ?? false }
+            return consumed ? nil : event
+        }
+    }
+
+    /// Mouse side buttons: 3 is Back and 4 is Forward, as in browsers.
+    private func handleMouse(_ event: NSEvent) -> Bool {
+        guard NSApp.keyWindow?.attachedSheet == nil, creation == nil, projectEditor == nil else { return false }
+        switch event.buttonNumber {
+        case 3: navigateBack(); return true
+        case 4: navigateForward(); return true
+        default: return false
         }
     }
 
