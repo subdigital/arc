@@ -202,6 +202,18 @@ import Testing
         #expect(again.projects.unchanged == 3 && again.projects.created == 0)
     }
 
+    @Test func embeddedUploadsBecomeMarkdownLinksAndImages() async throws {
+        let store = try makeStore()
+        let embed = #"<linear-embed node-type="file">{"uploadState":"finished","href":"https:\/\/uploads.linear.app\/w\/f\/3cb0","name":"Party [2026].st4p","size":2063}</linear-embed>"#
+        let image = #"<linear-embed node-type="image">{"src":"https://uploads.linear.app/w/f/pic.png","alt":"x","title":"Screenshot.png"}</linear-embed>"#
+        let directory = try makeExport { $0[0]["description"] = "Before\n\n\(embed)\n\nMiddle \(image) after" }
+        let report = try await LinearImporter.run(store: store, options: options(directory))
+        #expect(report.succeeded, "\(report.errors)")
+        let description = try await store.resolveTicket("FIC-1").description
+        #expect(description == "Before\n\n[Party \\[2026\\].st4p](https://uploads.linear.app/w/f/3cb0)\n\nMiddle ![Screenshot.png](https://uploads.linear.app/w/f/pic.png) after")
+        #expect(!description.contains("linear-embed"))
+    }
+
     @Test func resetRemovesOnlyWhatTheImportCreated() async throws {
         let store = try makeStore()
         _ = try await LinearImporter.run(store: store, options: options(try makeExport()))
