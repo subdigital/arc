@@ -46,7 +46,7 @@ public final class ArcStore: Sendable {
         try await read { db in try Self.resolveProject(db, reference) }
     }
 
-    public func createProject(name: String, description: String = "", color: String? = nil) async throws -> Project {
+    public func createProject(name: String, description: String = "", color: String? = nil, icon: String? = nil) async throws -> Project {
         let timestamp = now()
         return try await write { db in
             let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -60,6 +60,8 @@ public final class ArcStore: Sendable {
                 nameKey: key,
                 description: description,
                 color: color ?? Self.projectColors[count % Self.projectColors.count],
+                icon: icon,
+                externalId: nil,
                 archivedAt: nil,
                 createdAt: timestamp,
                 updatedAt: timestamp
@@ -69,7 +71,8 @@ public final class ArcStore: Sendable {
         }
     }
 
-    public func updateProject(id: String, name: String? = nil, description: String? = nil, color: String? = nil) async throws -> Project {
+        /// `icon` is an emoji or SF Symbol name; an empty string clears it.
+    public func updateProject(id: String, name: String? = nil, description: String? = nil, color: String? = nil, icon: String? = nil) async throws -> Project {
         let timestamp = now()
         return try await write { db in
             var project = try Self.requireProject(db, id: id)
@@ -83,6 +86,7 @@ public final class ArcStore: Sendable {
             }
             if let description { project.description = description }
             if let color { project.color = color }
+            if let icon { project.icon = icon.isEmpty ? nil : icon }
             project.updatedAt = timestamp
             try project.update(db)
             return project

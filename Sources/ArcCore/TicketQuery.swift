@@ -9,6 +9,9 @@ public struct TicketQuery: Sendable, Equatable {
     public var parentId: String?
     /// Only tickets without a parent.
     public var topLevelOnly: Bool
+    /// Tickets with any of these labels.
+    public var labelIds: Set<String>
+    public var milestoneId: String?
     public var text: String?
     /// Without explicit `statuses`, closed tickets (Done, Canceled) are left out unless this is true.
     public var includeClosed: Bool
@@ -22,6 +25,8 @@ public struct TicketQuery: Sendable, Equatable {
         priorities: Set<TicketPriority> = [],
         parentId: String? = nil,
         topLevelOnly: Bool = false,
+        labelIds: Set<String> = [],
+        milestoneId: String? = nil,
         text: String? = nil,
         includeClosed: Bool = false,
         includeArchivedProjects: Bool = false,
@@ -32,6 +37,8 @@ public struct TicketQuery: Sendable, Equatable {
         self.priorities = priorities
         self.parentId = parentId
         self.topLevelOnly = topLevelOnly
+        self.labelIds = labelIds
+        self.milestoneId = milestoneId
         self.text = text
         self.includeClosed = includeClosed
         self.includeArchivedProjects = includeArchivedProjects
@@ -56,6 +63,10 @@ public struct TicketSummary: Sendable, Hashable, Identifiable, FetchableRecord {
     public var parent: TicketRef?
     public var childCount: Int
     public var childrenDone: Int
+    public var milestoneName: String?
+    /// True while at least one ticket that blocks this one is still open.
+    public var isBlocked: Bool
+    public var labels: [Label] = []
 
     public var id: String { ticket.id }
 
@@ -64,6 +75,8 @@ public struct TicketSummary: Sendable, Hashable, Identifiable, FetchableRecord {
         projectName = row["project_name"]
         childCount = row["child_count"]
         childrenDone = row["child_done_count"]
+        milestoneName = row["milestone_name"]
+        isBlocked = (row["blocked_count"] as Int? ?? 0) > 0
         parent = Self.ref(row, prefix: "parent_ref")
     }
 
@@ -101,6 +114,10 @@ public struct TicketDetail: Sendable, Hashable {
     public var parent: Ticket?
     public var children: [Ticket]
     public var comments: [Comment]
+    public var labels: [Label]
+    public var relations: TicketRelations
+    public var attachments: [Attachment]
+    public var milestone: Milestone?
 }
 
 extension ArcStore {
@@ -114,10 +131,14 @@ extension ArcStore {
                par.id AS parent_ref_id, par.prefix AS parent_ref_prefix, par.number AS parent_ref_number,
                par.title AS parent_ref_title, par.status AS parent_ref_status,
                (SELECT COUNT(*) FROM ticket c WHERE c.parent_id = ticket.id) AS child_count,
-               (SELECT COUNT(*) FROM ticket c WHERE c.parent_id = ticket.id AND c.status = 'done') AS child_done_count
+               (SELECT COUNT(*) FROM ticket c WHERE c.parent_id = ticket.id AND c.status = 'done') AS child_done_count,
+               milestone.name AS milestone_name,
+               (SELECT COUNT(*) FROM relation r JOIN ticket b ON b.id = r.from_id
+                WHERE r.to_id = ticket.id AND r.type = 'blocks' AND b.status NOT IN ('done', 'canceled')) AS blocked_count
         FROM ticket
         JOIN project ON project.id = ticket.project_id
         LEFT JOIN ticket par ON par.id = ticket.parent_id
+        LEFT JOIN milestone ON milestone.id = ticket.milestone_id
         """
 
     /// Tickets ordered by status (workflow order), then manual order.
@@ -150,6 +171,15 @@ extension ArcStore {
             arguments += [parentId]
         }
         if query.topLevelOnly { clauses.append("ticket.parent_id IS NULL") }
+        if !query.labelIds.isEmpty {
+            let ids = query.labelIds.sorted()
+            clauses.append("EXISTS (SELECT 1 FROM ticket_label tl WHERE tl.ticket_id = ticket.id AND tl.label_id IN (\(databaseQuestionMarks(count: ids.count))))")
+            arguments += StatementArguments(ids)
+        }
+        if let milestoneId = query.milestoneId {
+            clauses.append("ticket.milestone_id = ?")
+            arguments += [milestoneId]
+        }
         if let text = query.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
             let escaped = text
                 .replacingOccurrences(of: "\\", with: "\\\\")
@@ -170,7 +200,26 @@ extension ArcStore {
             sql += "\nLIMIT ?"
             arguments += [max(limit, 0)]
         }
-        return try TicketSummary.fetchAll(db, sql: sql, arguments: arguments)
+        return try attachLabels(db, to: try TicketSummary.fetchAll(db, sql: sql, arguments: arguments))
+    }
+
+    /// Fills in each summary's labels with one extra query.
+    static func attachLabels(_ db: Database, to summaries: [TicketSummary]) throws -> [TicketSummary] {
+        guard !summaries.isEmpty else { return summaries }
+        var byTicket: [String: [Label]] = [:]
+        let rows = try Row.fetchAll(db, sql: """
+            SELECT ticket_label.ticket_id AS ticket_id, label.* FROM ticket_label
+            JOIN label ON label.id = ticket_label.label_id ORDER BY label.name_key
+            """)
+        for row in rows {
+            byTicket[row["ticket_id"], default: []].append(try Label(row: row))
+        }
+        guard !byTicket.isEmpty else { return summaries }
+        return summaries.map { summary in
+            var copy = summary
+            copy.labels = byTicket[summary.ticket.id] ?? []
+            return copy
+        }
     }
 
     /// Every existing identifier, e.g. `ARC-12` (used to decide which references in text are real).
@@ -183,7 +232,7 @@ extension ArcStore {
             guard let summary = try TicketSummary.fetchOne(db, sql: Self.summarySQL + "\nWHERE ticket.id = ?", arguments: [id]) else {
                 throw ArcError.notFound("Ticket not found.")
             }
-            return summary
+            return try Self.attachLabels(db, to: [summary])[0]
         }
     }
 
@@ -212,7 +261,15 @@ extension ArcStore {
             sql: "SELECT * FROM comment WHERE ticket_id = ? ORDER BY created_at, rowid",
             arguments: [ticket.id]
         )
-        return TicketDetail(ticket: ticket, project: project, parent: parent, children: children, comments: comments)
+        let milestone = try ticket.milestoneId.flatMap {
+            try Milestone.fetchOne(db, sql: "SELECT * FROM milestone WHERE id = ?", arguments: [$0])
+        }
+        return TicketDetail(
+            ticket: ticket, project: project, parent: parent, children: children, comments: comments,
+            labels: try labels(db, ticketId: ticket.id), relations: try relations(db, ticketId: ticket.id),
+            attachments: try Attachment.fetchAll(db, sql: "SELECT * FROM attachment WHERE ticket_id = ? ORDER BY created_at, rowid", arguments: [ticket.id]),
+            milestone: milestone
+        )
     }
 
     /// Tickets that have children, with their progress (Canceled children excluded), ordered by project name then workflow order.

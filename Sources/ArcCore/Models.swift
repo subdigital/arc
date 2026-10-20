@@ -83,6 +83,9 @@ public struct Project: Codable, FetchableRecord, PersistableRecord, Sendable, Ha
     public var nameKey: String
     public var description: String
     public var color: String
+    /// An emoji or SF Symbol name shown next to the name.
+    public var icon: String?
+    public var externalId: String?
     public var archivedAt: Date?
     public var createdAt: Date
     public var updatedAt: Date
@@ -110,7 +113,13 @@ public struct Ticket: Codable, FetchableRecord, PersistableRecord, Sendable, Has
     public var sortKey: Double
     public var createdAt: Date
     public var updatedAt: Date
+    public var startedAt: Date?
     public var completedAt: Date?
+    public var canceledAt: Date?
+    public var archivedAt: Date?
+    public var milestoneId: String?
+    /// Set for imported tickets (`linear:issue:<id>`), so re-running an import updates instead of duplicating.
+    public var externalId: String?
 
     public var identifier: String { "\(prefix)-\(number)" }
 }
@@ -127,4 +136,90 @@ public struct Comment: Codable, FetchableRecord, PersistableRecord, Sendable, Ha
     public var body: String
     public var author: CommentAuthor
     public var createdAt: Date
+    /// Replies point at the comment they answer.
+    public var parentId: String?
+    /// Who wrote it, when that is a specific person (imported comments keep their author's name).
+    public var authorName: String?
+    public var updatedAt: Date?
+    public var externalId: String?
+}
+
+public struct Milestone: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
+    public static let databaseTableName = "milestone"
+    public static let databaseColumnDecodingStrategy = DatabaseColumnDecodingStrategy.convertFromSnakeCase
+    public static let databaseColumnEncodingStrategy = DatabaseColumnEncodingStrategy.convertToSnakeCase
+    public static let databaseDateDecodingStrategy = DatabaseDateDecodingStrategy.timeIntervalSince1970
+    public static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.timeIntervalSince1970
+
+    public var id: String
+    public var projectId: String
+    public var name: String
+    public var description: String
+    public var targetDate: Date?
+    public var sortOrder: Double
+    public var externalId: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct Label: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
+    public static let databaseTableName = "label"
+    public static let databaseColumnDecodingStrategy = DatabaseColumnDecodingStrategy.convertFromSnakeCase
+    public static let databaseColumnEncodingStrategy = DatabaseColumnEncodingStrategy.convertToSnakeCase
+    public static let databaseDateDecodingStrategy = DatabaseDateDecodingStrategy.timeIntervalSince1970
+    public static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.timeIntervalSince1970
+
+    public var id: String
+    public var name: String
+    public var nameKey: String
+    public var color: String
+    public var description: String
+    public var externalId: String?
+    public var createdAt: Date
+}
+
+public enum RelationType: String, Codable, Sendable, CaseIterable, DatabaseValueConvertible {
+    case blocks, related, duplicate
+}
+
+/// A stored relation row. `blocks` and `duplicate` read "from → to"; `related` has no direction.
+public struct TicketRelation: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
+    public static let databaseTableName = "relation"
+    public static let databaseColumnDecodingStrategy = DatabaseColumnDecodingStrategy.convertFromSnakeCase
+    public static let databaseColumnEncodingStrategy = DatabaseColumnEncodingStrategy.convertToSnakeCase
+    public static let databaseDateDecodingStrategy = DatabaseDateDecodingStrategy.timeIntervalSince1970
+    public static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.timeIntervalSince1970
+
+    public var id: String
+    public var fromId: String
+    public var toId: String
+    public var type: RelationType
+    public var createdAt: Date
+}
+
+public enum AttachmentKind: String, Codable, Sendable, DatabaseValueConvertible {
+    case link, file
+}
+
+public struct Attachment: Codable, FetchableRecord, PersistableRecord, Sendable, Hashable, Identifiable {
+    public static let databaseTableName = "attachment"
+    public static let databaseColumnDecodingStrategy = DatabaseColumnDecodingStrategy.convertFromSnakeCase
+    public static let databaseColumnEncodingStrategy = DatabaseColumnEncodingStrategy.convertToSnakeCase
+    public static let databaseDateDecodingStrategy = DatabaseDateDecodingStrategy.timeIntervalSince1970
+    public static let databaseDateEncodingStrategy = DatabaseDateEncodingStrategy.timeIntervalSince1970
+
+    public var id: String
+    public var ticketId: String
+    public var kind: AttachmentKind
+    public var title: String
+    /// Links: the target. Files: where the file came from, when known.
+    public var url: String?
+    /// Files: path relative to the attachments folder next to the database.
+    public var path: String?
+    public var mimeType: String?
+    public var size: Int?
+    public var externalId: String?
+    public var createdAt: Date
+
+    public var isImage: Bool { (mimeType ?? "").hasPrefix("image/") }
 }

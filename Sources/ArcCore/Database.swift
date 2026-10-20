@@ -129,6 +129,101 @@ public enum ArcDatabase {
             try db.create(index: "ticket_parent", on: "ticket", columns: ["parent_id"])
         }
 
+        // Timestamps like Linear's, labels, relations, milestones, attachments, comment threads, project icons,
+        // and external ids so an import can be re-run without duplicating anything.
+        migrator.registerMigration("v3") { db in
+            try db.execute(sql: """
+                ALTER TABLE ticket ADD COLUMN started_at DOUBLE;
+                ALTER TABLE ticket ADD COLUMN canceled_at DOUBLE;
+                ALTER TABLE ticket ADD COLUMN archived_at DOUBLE;
+                ALTER TABLE ticket ADD COLUMN milestone_id TEXT REFERENCES milestone(id) ON DELETE SET NULL;
+                ALTER TABLE ticket ADD COLUMN external_id TEXT;
+                ALTER TABLE project ADD COLUMN icon TEXT;
+                ALTER TABLE project ADD COLUMN external_id TEXT;
+                ALTER TABLE comment ADD COLUMN parent_id TEXT REFERENCES comment(id) ON DELETE CASCADE;
+                ALTER TABLE comment ADD COLUMN author_name TEXT;
+                ALTER TABLE comment ADD COLUMN updated_at DOUBLE;
+                ALTER TABLE comment ADD COLUMN external_id TEXT;
+                """)
+            // Linear cancels carry their own date; older rows used completed_at for both closed states.
+            try db.execute(sql: """
+                UPDATE ticket SET canceled_at = completed_at, completed_at = NULL WHERE status = 'canceled'
+                """)
+
+            try db.create(table: "milestone") { t in
+                t.primaryKey("id", .text)
+                t.column("project_id", .text).notNull().references("project", onDelete: .cascade)
+                t.column("name", .text).notNull()
+                t.column("description", .text).notNull().defaults(to: "")
+                t.column("target_date", .double)
+                t.column("sort_order", .double).notNull().defaults(to: 0)
+                t.column("external_id", .text)
+                t.column("created_at", .double).notNull()
+                t.column("updated_at", .double).notNull()
+            }
+            try db.create(index: "milestone_project", on: "milestone", columns: ["project_id", "sort_order"])
+
+            try db.create(table: "label") { t in
+                t.primaryKey("id", .text)
+                t.column("name", .text).notNull()
+                t.column("name_key", .text).notNull().unique()
+                t.column("color", .text).notNull()
+                t.column("description", .text).notNull().defaults(to: "")
+                t.column("external_id", .text)
+                t.column("created_at", .double).notNull()
+            }
+            try db.create(table: "ticket_label") { t in
+                t.column("ticket_id", .text).notNull().references("ticket", onDelete: .cascade)
+                t.column("label_id", .text).notNull().references("label", onDelete: .cascade)
+                t.primaryKey(["ticket_id", "label_id"])
+            }
+            try db.create(index: "ticket_label_label", on: "ticket_label", columns: ["label_id"])
+
+            // `blocks` and `duplicate` are directed (from → to); `related` is stored once, smaller id first.
+            try db.create(table: "relation") { t in
+                t.primaryKey("id", .text)
+                t.column("from_id", .text).notNull().references("ticket", onDelete: .cascade)
+                t.column("to_id", .text).notNull().references("ticket", onDelete: .cascade)
+                t.column("type", .text).notNull().check(sql: "type IN ('blocks','related','duplicate')")
+                t.column("created_at", .double).notNull()
+                t.uniqueKey(["from_id", "to_id", "type"])
+                t.check(sql: "from_id <> to_id")
+            }
+            try db.create(index: "relation_to", on: "relation", columns: ["to_id"])
+
+            try db.create(table: "attachment") { t in
+                t.primaryKey("id", .text)
+                t.column("ticket_id", .text).notNull().references("ticket", onDelete: .cascade)
+                t.column("kind", .text).notNull().check(sql: "kind IN ('link','file')")
+                t.column("title", .text).notNull()
+                t.column("url", .text)
+                t.column("path", .text)
+                t.column("mime_type", .text)
+                t.column("size", .integer)
+                t.column("external_id", .text)
+                t.column("created_at", .double).notNull()
+            }
+            try db.create(index: "attachment_ticket", on: "attachment", columns: ["ticket_id", "created_at"])
+
+            // What an import created or last wrote, so a re-run can tell new / unchanged / edited-since.
+            try db.create(table: "import_record") { t in
+                t.column("external_id", .text).notNull().primaryKey()
+                t.column("kind", .text).notNull()
+                t.column("local_id", .text).notNull()
+                t.column("source_hash", .text).notNull()
+                t.column("imported_at", .double).notNull()
+            }
+            try db.create(index: "import_record_local", on: "import_record", columns: ["kind", "local_id"])
+
+            try db.execute(sql: "CREATE UNIQUE INDEX ticket_external ON ticket(external_id) WHERE external_id IS NOT NULL")
+            try db.execute(sql: "CREATE UNIQUE INDEX project_external ON project(external_id) WHERE external_id IS NOT NULL")
+            try db.execute(sql: "CREATE UNIQUE INDEX comment_external ON comment(external_id) WHERE external_id IS NOT NULL")
+            try db.execute(sql: "CREATE UNIQUE INDEX milestone_external ON milestone(external_id) WHERE external_id IS NOT NULL")
+            try db.execute(sql: "CREATE UNIQUE INDEX label_external ON label(external_id) WHERE external_id IS NOT NULL")
+            try db.execute(sql: "CREATE UNIQUE INDEX attachment_external ON attachment(external_id) WHERE external_id IS NOT NULL")
+            try db.create(index: "ticket_milestone", on: "ticket", columns: ["milestone_id"])
+        }
+
         return migrator
     }
 }

@@ -34,6 +34,9 @@ import Testing
 
         #expect(json == """
         {
+          "archivedAt" : null,
+          "blocked" : false,
+          "canceledAt" : null,
           "children" : [
             {
               "identifier" : "ARC-3",
@@ -53,6 +56,10 @@ import Testing
           "createdAt" : "2027-01-15T08:00:00Z",
           "description" : "Needs `links`",
           "identifier" : "ARC-2",
+          "labels" : [
+
+          ],
+          "milestone" : null,
           "parent" : {
             "identifier" : "ARC-1",
             "status" : "todo",
@@ -63,6 +70,7 @@ import Testing
             "id" : "project-id",
             "name" : "Website"
           },
+          "startedAt" : "2027-01-15T08:00:00Z",
           "status" : "in_progress",
           "title" : "Build footer",
           "updatedAt" : "2027-01-15T08:00:00Z"

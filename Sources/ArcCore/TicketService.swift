@@ -39,6 +39,7 @@ public struct TicketPatch: Sendable {
     public var priority: TicketPriority?
     public var projectId: String?
     public var parentId: Change<String?>
+    public var milestoneId: Change<String?>
 
     public init(
         title: String? = nil,
@@ -46,7 +47,8 @@ public struct TicketPatch: Sendable {
         status: TicketStatus? = nil,
         priority: TicketPriority? = nil,
         projectId: String? = nil,
-        parentId: Change<String?> = .keep
+        parentId: Change<String?> = .keep,
+        milestoneId: Change<String?> = .keep
     ) {
         self.title = title
         self.description = description
@@ -54,6 +56,7 @@ public struct TicketPatch: Sendable {
         self.priority = priority
         self.projectId = projectId
         self.parentId = parentId
+        self.milestoneId = milestoneId
     }
 }
 
@@ -127,8 +130,14 @@ extension ArcStore {
                 sortKey: try Self.topSortKey(db, status: new.status, excluding: nil),
                 createdAt: timestamp,
                 updatedAt: timestamp,
-                completedAt: new.status.isClosed ? timestamp : nil
+                startedAt: nil,
+                completedAt: nil,
+                canceledAt: nil,
+                archivedAt: nil,
+                milestoneId: nil,
+                externalId: nil
             )
+            Self.apply(status: new.status, to: &ticket, at: timestamp)
             try Self.validateHierarchy(db, ticket)
             try ticket.insert(db)
             ticket = try Self.requireTicket(db, id: ticket.id)
@@ -164,7 +173,10 @@ extension ArcStore {
             if let projectId = patch.projectId, projectId != ticket.projectId {
                 _ = try Self.requireProject(db, id: projectId)
                 ticket.projectId = projectId
+                ticket.milestoneId = nil // milestones belong to a project
             }
+            if case .set(let milestoneId) = patch.milestoneId { ticket.milestoneId = milestoneId }
+            try Self.validateMilestone(db, ticket)
 
             try Self.validateHierarchy(db, ticket)
 
@@ -194,9 +206,26 @@ extension ArcStore {
         }
     }
 
-    private static func apply(status: TicketStatus, to ticket: inout Ticket, at timestamp: Date) {
+    /// Sets the status and the timestamps that go with it, the way Linear does: the first move into a started
+    /// status sets `startedAt` (reopening keeps it), Done sets `completedAt`, Canceled sets `canceledAt`, and
+    /// moving back to an open status clears both closing dates.
+    static func apply(status: TicketStatus, to ticket: inout Ticket, at timestamp: Date) {
         ticket.status = status
-        ticket.completedAt = status.isClosed ? timestamp : nil
+        switch status {
+        case .backlog, .todo:
+            ticket.completedAt = nil
+            ticket.canceledAt = nil
+        case .inProgress, .inReview:
+            ticket.completedAt = nil
+            ticket.canceledAt = nil
+            if ticket.startedAt == nil { ticket.startedAt = timestamp }
+        case .done:
+            ticket.completedAt = timestamp
+            ticket.canceledAt = nil
+        case .canceled:
+            ticket.canceledAt = timestamp
+            ticket.completedAt = nil
+        }
     }
 
     // MARK: - Delete
@@ -207,6 +236,7 @@ extension ArcStore {
             _ = try Self.requireTicket(db, id: id)
             try db.execute(sql: "DELETE FROM ticket WHERE id = ?", arguments: [id])
         }
+        removeAttachmentFiles(ticketId: id)
     }
 
     // MARK: - Hierarchy rules
@@ -312,14 +342,24 @@ extension ArcStore {
     }
 
     @discardableResult
-    public func addComment(ticketId: String, body: String, author: CommentAuthor) async throws -> Comment {
+    public func addComment(
+        ticketId: String, body: String, author: CommentAuthor, parentId: String? = nil, authorName: String? = nil
+    ) async throws -> Comment {
         let timestamp = now()
         return try await write { db in
             guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw ArcError.invalidArgument("A comment body is required.")
             }
             _ = try Self.requireTicket(db, id: ticketId)
-            let comment = Comment(id: UUID().uuidString, ticketId: ticketId, body: body, author: author, createdAt: timestamp)
+            if let parentId {
+                guard let parent = try Comment.fetchOne(db, sql: "SELECT * FROM comment WHERE id = ?", arguments: [parentId]),
+                      parent.ticketId == ticketId
+                else { throw ArcError.invalidArgument("A reply must answer a comment on the same ticket.") }
+            }
+            let comment = Comment(
+                id: UUID().uuidString, ticketId: ticketId, body: body, author: author, createdAt: timestamp,
+                parentId: parentId, authorName: authorName, updatedAt: nil, externalId: nil
+            )
             try comment.insert(db)
             return comment
         }
@@ -327,7 +367,8 @@ extension ArcStore {
 
     @discardableResult
     public func updateComment(id: String, body: String) async throws -> Comment {
-        try await write { db in
+        let timestamp = now()
+        return try await write { db in
             guard !body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw ArcError.invalidArgument("A comment body is required.")
             }
@@ -335,8 +376,22 @@ extension ArcStore {
                 throw ArcError.notFound("Comment not found.")
             }
             comment.body = body
+            comment.updatedAt = timestamp
             try comment.update(db)
             return comment
+        }
+    }
+}
+
+extension ArcStore {
+    /// A milestone must belong to the ticket's own project.
+    static func validateMilestone(_ db: Database, _ ticket: Ticket) throws {
+        guard let milestoneId = ticket.milestoneId else { return }
+        guard let milestone = try Milestone.fetchOne(db, sql: "SELECT * FROM milestone WHERE id = ?", arguments: [milestoneId]) else {
+            throw ArcError.notFound("Milestone not found.")
+        }
+        guard milestone.projectId == ticket.projectId else {
+            throw ArcError.invalidArgument("Milestone '\(milestone.name)' belongs to a different project.")
         }
     }
 }

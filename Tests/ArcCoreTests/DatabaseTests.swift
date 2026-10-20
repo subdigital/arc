@@ -31,7 +31,7 @@ import Testing
             let indexes = Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type = 'index'"))
             #expect(indexes.isSuperset(of: ["ticket_project_status_sort", "ticket_parent"]))
             let applied = try String.fetchAll(db, sql: "SELECT identifier FROM grdb_migrations")
-            #expect(applied == ["v1", "v2"])
+            #expect(applied == ["v1", "v2", "v3"])
         }
     }
 

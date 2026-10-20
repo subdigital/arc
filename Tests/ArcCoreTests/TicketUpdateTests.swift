@@ -34,15 +34,24 @@ import Testing
         clock.advance()
         let done = try await store.updateTicket(id: ticket.id, TicketPatch(status: .done))
         #expect(done.status == .done)
-        #expect(done.completedAt == clock.now)
+        #expect(done.completedAt == clock.now && done.canceledAt == nil)
 
         clock.advance()
         let reopened = try await store.updateTicket(id: ticket.id, TicketPatch(status: .todo))
-        #expect(reopened.completedAt == nil)
+        #expect(reopened.completedAt == nil && reopened.canceledAt == nil)
 
         clock.advance()
         let canceled = try await store.updateTicket(id: ticket.id, TicketPatch(status: .canceled))
-        #expect(canceled.completedAt == clock.now)
+        #expect(canceled.canceledAt == clock.now && canceled.completedAt == nil)
+
+        // The first move into a started status sets startedAt; reopening later keeps it.
+        clock.advance()
+        let started = try await store.updateTicket(id: ticket.id, TicketPatch(status: .inProgress))
+        #expect(started.startedAt == clock.now && started.canceledAt == nil)
+        clock.advance()
+        let backToTodo = try await store.updateTicket(id: ticket.id, TicketPatch(status: .todo))
+        let restarted = try await store.updateTicket(id: backToTodo.id, TicketPatch(status: .inReview))
+        #expect(restarted.startedAt == started.startedAt)
     }
 
     @Test func statusChangeWithoutPositionPutsTicketOnTop() async throws {
