@@ -187,6 +187,21 @@ import Testing
         #expect(try await store.ticket(id: "x").title == "Squatter")
     }
 
+    @Test func aProjectWithTheSameNameIsAdoptedNotDuplicated() async throws {
+        let store = try makeStore()
+        let existing = try await store.createProject(name: "alpha")
+        let mine = try await store.task("Mine", in: existing)
+        let report = try await LinearImporter.run(store: store, options: options(try makeExport()))
+        #expect(report.succeeded, "\(report.errors)")
+        #expect(report.warnings.contains { $0.contains("already existed") })
+        let names = try await store.projects(includeArchived: true).map(\.name)
+        #expect(!names.contains { $0.contains("Linear") })
+        #expect(try await store.resolveTicket("FIC-1").projectId == existing.id)
+        #expect(try await store.ticket(id: mine.id).projectId == existing.id)
+        let again = try await LinearImporter.run(store: store, options: options(try makeExport()))
+        #expect(again.projects.unchanged == 3 && again.projects.created == 0)
+    }
+
     @Test func resetRemovesOnlyWhatTheImportCreated() async throws {
         let store = try makeStore()
         _ = try await LinearImporter.run(store: store, options: options(try makeExport()))
