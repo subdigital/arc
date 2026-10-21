@@ -112,3 +112,7 @@ arc import linear --reset --yes             # remove everything an import create
 ```
 
 Every imported item carries an external id and a content fingerprint. A re-run leaves tickets you edited in Arc alone (and says so), never removes comments, labels or relations you added yourself, and ends with a verification pass that compares the database with the export; the exit status is 1 if anything does not match. Uploads hosted by Linear are saved under `attachments/linear` next to the database.
+
+## License
+
+Arc is released under the [MIT License](LICENSE).
