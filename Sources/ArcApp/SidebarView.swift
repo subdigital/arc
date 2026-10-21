@@ -206,17 +206,43 @@ struct IconPicker: View {
     }
 }
 
+/// A row of swatches from the curated project palette.
+struct ProjectColorPicker: View {
+    @Binding var hex: String
+
+    var body: some View {
+        LazyVGrid(columns: Array(repeating: GridItem(.fixed(24), spacing: 8), count: 6), alignment: .leading, spacing: 8) {
+            ForEach(ArcStore.colorChoices, id: \.self) { choice in
+                Button { hex = choice } label: {
+                    Circle()
+                        .fill(Color(hexString: choice))
+                        .frame(width: 20, height: 20)
+                        .overlay {
+                            if hex.caseInsensitiveCompare(choice) == .orderedSame {
+                                Image(systemName: "checkmark").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+                            }
+                        }
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .help(choice)
+                .accessibilityLabel("Color \(choice)")
+            }
+        }
+    }
+}
+
 struct ProjectEditorSheet: View {
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     let request: ProjectEditorRequest
     @State private var name = ""
     @State private var icon = ""
+    @State private var colorHex = ""
     @FocusState private var focused: Bool
 
-    private var tintHex: String {
-        if case .rename(let project) = request.mode { project.color } else { "#5E6AD2" }
-    }
+    private var tintHex: String { colorHex.isEmpty ? ArcStore.projectColors[0] : colorHex }
 
     private var title: String {
         if case .rename = request.mode { "Edit Project" } else { "New Project" }
@@ -229,6 +255,7 @@ struct ProjectEditorSheet: View {
                 .textFieldStyle(.roundedBorder)
                 .focused($focused)
                 .onSubmit(save)
+            ProjectColorPicker(hex: $colorHex)
             IconPicker(icon: $icon, tint: Color(hexString: tintHex))
             HStack {
                 Spacer()
@@ -245,7 +272,14 @@ struct ProjectEditorSheet: View {
         .frame(width: 340)
         .background(Theme.bgElevated)
         .onAppear {
-            if case .rename(let project) = request.mode { name = project.name; icon = ProjectIcons.normalized(project.icon ?? "") }
+            switch request.mode {
+            case .rename(let project):
+                name = project.name
+                icon = ProjectIcons.normalized(project.icon ?? "")
+                colorHex = project.color
+            case .create:
+                colorHex = ArcStore.projectColors[app.projects.count % ArcStore.projectColors.count]
+            }
             focused = true
         }
     }
@@ -261,12 +295,12 @@ struct ProjectEditorSheet: View {
             let succeeded: Bool
             switch request.mode {
             case .create:
-                if let project = await app.perform({ try await app.store.createProject(name: trimmed, icon: icon.isEmpty ? nil : icon) }) {
+                if let project = await app.perform({ try await app.store.createProject(name: trimmed, color: colorHex, icon: icon.isEmpty ? nil : icon) }) {
                     app.selection = .project(project.id)
                     succeeded = true
                 } else { succeeded = false }
             case .rename(let project):
-                succeeded = await app.perform { try await app.store.updateProject(id: project.id, name: trimmed, icon: icon) } != nil
+                succeeded = await app.perform { try await app.store.updateProject(id: project.id, name: trimmed, color: colorHex, icon: icon) } != nil
             }
             if succeeded { dismiss() }
         }

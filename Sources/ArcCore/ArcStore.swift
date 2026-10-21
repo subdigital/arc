@@ -12,6 +12,11 @@ public final class ArcStore: Sendable {
         "#5E6AD2", "#4CB782", "#F2C94C", "#F2994A", "#EB5757", "#BB87FC", "#4EA7FC", "#26B5CE",
     ]
 
+    /// The colors offered in the project editor: the automatic ones first, then a few more.
+    public static let colorChoices = projectColors + [
+        "#E5548C", "#8FD14F", "#A0714F", "#95A2B3",
+    ]
+
     /// Opens the store at `path`, or at `ARC_DB_PATH` / the default location when `path` is nil.
     public init(path: String? = nil, now: @escaping @Sendable () -> Date = { Date() }) throws {
         let resolved = path ?? ArcDatabase.resolvePath()
