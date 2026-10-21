@@ -7,6 +7,8 @@ A lightweight native macOS issue tracker for one person and their coding agents.
 - One local SQLite database is shared by the app and the `arc` command-line tool, so what an agent does shows up in the app within a couple of seconds.
 - Agents work through the `arc` CLI, an MCP server (`arc mcp`) or an installable skill.
 
+![arc screenshot](./meta/arc.png)
+
 ## Requirements
 
 - macOS 26+
