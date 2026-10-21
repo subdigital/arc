@@ -47,7 +47,7 @@ import Testing
 
     @Test func burstsAreCoalesced() async throws {
         let store = try ArcStore(path: temporaryDatabasePath())
-        let feed = ChangeFeed(store: store, pollInterval: .seconds(60), debounce: .milliseconds(150), isActive: { true })
+        let feed = ChangeFeed(store: store, pollInterval: .seconds(60), debounce: .milliseconds(150), listensForSystemSignals: false, isActive: { true })
         feed.start()
         defer { feed.stop() }
 
@@ -62,7 +62,7 @@ import Testing
         let path = temporaryDatabasePath()
         let app = try ArcStore(path: path)
         let agent = try ArcStore(path: path)
-        let feed = ChangeFeed(store: app, pollInterval: .milliseconds(100), isActive: { false })
+        let feed = ChangeFeed(store: app, pollInterval: .milliseconds(100), listensForSystemSignals: false, isActive: { false })
         feed.start()
         defer { feed.stop() }
 

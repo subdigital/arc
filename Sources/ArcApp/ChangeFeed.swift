@@ -18,6 +18,7 @@ final class ChangeFeed {
     @ObservationIgnored private let pollInterval: Duration
     @ObservationIgnored private let debounce: Duration
     @ObservationIgnored private let isActive: @MainActor () -> Bool
+    @ObservationIgnored private let listensForSystemSignals: Bool
     @ObservationIgnored private var observation: AnyDatabaseCancellable?
     @ObservationIgnored private var tokens: [NSObjectProtocol] = []
     @ObservationIgnored private var pollTask: Task<Void, Never>?
@@ -29,11 +30,13 @@ final class ChangeFeed {
         store: ArcStore,
         pollInterval: Duration = .seconds(1),
         debounce: Duration = .milliseconds(100),
+        listensForSystemSignals: Bool = true,
         isActive: @escaping @MainActor () -> Bool = { NSApp?.isActive ?? true }
     ) {
         self.store = store
         self.pollInterval = pollInterval
         self.debounce = debounce
+        self.listensForSystemSignals = listensForSystemSignals
         self.isActive = isActive
     }
 
@@ -48,16 +51,20 @@ final class ChangeFeed {
             }
         )
 
-        tokens.append(DistributedNotificationCenter.default().addObserver(
-            forName: ArcChange.notificationName, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.signal() }
-        })
-        tokens.append(NotificationCenter.default.addObserver(
-            forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.checkNow() }
-        })
+        // The distributed notification is machine-wide, so anything else running (other tests, a real
+        // Arc, the CLI) can post it. Tests that assert exact tick counts turn this off.
+        if listensForSystemSignals {
+            tokens.append(DistributedNotificationCenter.default().addObserver(
+                forName: ArcChange.notificationName, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.signal() }
+            })
+            tokens.append(NotificationCenter.default.addObserver(
+                forName: NSApplication.didBecomeActiveNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkNow() }
+            })
+        }
 
         var configuration = Configuration()
         configuration.readonly = true
