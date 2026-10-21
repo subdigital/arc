@@ -353,6 +353,7 @@ final class AppModel {
               let from = order.firstIndex(of: anchor), let to = order.firstIndex(of: id)
         else { return toggleChecked(id) }
         checkedTicketIDs.formUnion(order[min(from, to)...max(from, to)])
+        selectionAnchor = anchor
     }
 
     /// The tickets an action should apply to: the ticked rows, or else the cursor row.

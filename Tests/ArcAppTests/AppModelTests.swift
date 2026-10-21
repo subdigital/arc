@@ -70,6 +70,13 @@ import Testing
         #expect(app.checkedTicketIDs == ["b", "d"])
     }
 
+    @Test func rangeStartsAtTheCursorRowWhenNothingIsTicked() throws {
+        let app = try model()
+        app.selectedTicketID = "b"
+        app.checkRange(to: "d", order: ["a", "b", "c", "d", "e"])
+        #expect(app.checkedTicketIDs == ["b", "c", "d"])
+    }
+
     @Test func actionTargetsPreferTickedRowsOverTheCursor() throws {
         let app = try model()
         app.selectedTicketID = "cursor"

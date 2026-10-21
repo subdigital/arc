@@ -186,13 +186,17 @@ struct TicketRowView: View {
     }
 
     private func click() {
-        app.selectedTicketID = ticket.id
         let modifiers = NSEvent.modifierFlags
+        // The range runs from the previous cursor row, so it has to be read before the cursor moves here.
         if modifiers.contains(.shift) {
             app.checkRange(to: ticket.id, order: order)
+            app.selectedTicketID = ticket.id
         } else if modifiers.contains(.command) {
+            app.selectedTicketID = ticket.id
             app.toggleChecked(ticket.id)
         } else {
+            app.selectedTicketID = ticket.id
+            app.selectionAnchor = ticket.id
             app.open(ticket: ticket.id)
         }
     }
