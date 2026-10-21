@@ -53,3 +53,8 @@ let package = Package(
     ],
     swiftLanguageModes: [.v6]
 )
+
+// Warnings are build failures. Fix the cause; don't silence it without a strong reason.
+for target in package.targets where target.type != .binary {
+    target.swiftSettings = (target.swiftSettings ?? []) + [.treatAllWarnings(as: .error)]
+}
